@@ -1,16 +1,17 @@
 # flutter_faust_ffi
 
-A new Flutter project.
+A basic flutter app to prove as a proof of concept utilizing Faust's C api export with Dart's ffi methods to create cross-platform plug-ins.
 
-## Getting Started
+The first step was preparing the Faust exported C file to be further exported as a dll.
+<ul>
+<li>In dsp_c</li>
+<li><ul>
+  <li>cmake .</li>
+  <li>cmake --build .</li>
+  <li>You'll find the generated dll file in dsp_c/Debug/</li>
+</ul></li>
+</ul>
 
-This project is a starting point for a Flutter application.
+The next step was creating the C-Native and Dart typedefs for dsp, gui, and metadata class objects and methods being used from the c code, found in lib/dsp_dart/api_types.dart
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+TODO: My next step is going to be utilizing those types to create a class object that will allow me to instantiate and run my faust dsp object.
