@@ -1,0 +1,7 @@
+LIBRARY faust_c
+EXPORTS
+	newmydsp
+	initmydsp
+	buildUserInterfacemydsp
+	computemydsp
+	deletemydsp
