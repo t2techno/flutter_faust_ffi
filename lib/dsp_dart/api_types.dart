@@ -1,5 +1,6 @@
 import 'dart:ffi';
 
+import 'package:ffi/ffi.dart';
 /* DSP Stuff
 
 typedef struct {
@@ -21,7 +22,7 @@ typedef struct {
 } mydsp;
 */
 class MyDsp extends Struct {
-  external Pointer<int> iVec0; //int iVec0[2];
+  external Pointer<Int32> iVec0; //int iVec0[2];
 
   @Int32()
   external int fSampleRate; //int fSampleRate;
@@ -29,14 +30,14 @@ class MyDsp extends Struct {
   @Float()
   external double fConst1; //float fConst1;
 
-  external Pointer<double> fRec0; //float fRec0[2];
+  external Pointer<Float> fRec0; //float fRec0[2];
 
-  external Pointer<double> fVec1; //float fVec1[2];
+  external Pointer<Float> fVec1; //float fVec1[2];
 
   @Int32()
   external int IOTA0; //int IOTA0;
   
-  external Pointer<double>fVec2; //float fVec2[512];
+  external Pointer<Float>fVec2; //float fVec2[512];
   
   @Int32()
   external int iConst4;// int iConst4;
@@ -56,7 +57,7 @@ class MyDsp extends Struct {
   @Float()
   external double fConst10; // float fConst10;
 
-  external Pointer<double> fRec1fRec1; // float fRec1[2];
+  external Pointer<Float> fRec1fRec1; // float fRec1[2];
 
   @Float()
   external double fConst11;// float fConst11;
@@ -66,38 +67,36 @@ class MyDsp extends Struct {
 typedef NewMyDsp = Pointer<MyDsp> Function();
 
 // 	void initmydsp(mydsp* dsp, int sample_rate)
-typedef InitMyDspNative = Pointer<void> Function(Pointer<MyDsp> dsp, Int32 sample_rate);
-typedef InitMyDsp = Pointer<void> Function(Pointer<MyDsp> dsp, int sample_rate);
+typedef InitMyDspNative = Pointer<Void> Function(Pointer<MyDsp> dsp, Int32 sample_rate);
+typedef InitMyDsp = Pointer<Void> Function(Pointer<MyDsp> dsp, int sample_rate);
 
 // void buildUserInterfacemydsp(mydsp* dsp, UIGlue* ui_interface)
-typedef BuildUserInterfaceMyDsp = Pointer<void> Function(Pointer<MyDsp> dsp, Pointer<UiGlue> ui_interface);
+typedef BuildUserInterfaceMyDsp = Pointer<Void> Function(Pointer<MyDsp> dsp, Pointer<UiGlue> ui_interface);
 
 // 	void computemydsp(mydsp* dsp, int count, FAUSTFLOAT** RESTRICT inputs, FAUSTFLOAT** RESTRICT outputs);
 typedef AudioIOArrayNative = Pointer<Pointer<Float>>;
-typedef AudioIOArray = Pointer<Pointer<double>>;
-typedef ComputeMyDspNative = Pointer<void> Function(Pointer<MyDsp> dsp, Int32 count, AudioIOArrayNative inputs, AudioIOArrayNative outputs);
-typedef ComputeMyDsp = Pointer<void> Function(Pointer<MyDsp> dsp, int count, AudioIOArray inputs, AudioIOArray outputs);
+typedef AudioIOArray = Pointer<Pointer<Float>>;
+typedef ComputeMyDspNative = Pointer<Void> Function(Pointer<MyDsp> dsp, Int32 count, AudioIOArrayNative inputs, AudioIOArrayNative outputs);
+typedef ComputeMyDsp = Pointer<Void> Function(Pointer<MyDsp> dsp, int count, AudioIOArray inputs, AudioIOArray outputs);
 
 // 	void deletemydsp(mydsp* dsp)
-typedef DeleteMyDsp = Pointer<void> Function(Pointer<MyDsp> dsp);
+typedef DeleteMyDsp = Pointer<Void> Function(Pointer<MyDsp> dsp);
 
 
 /* UI and Meta data stuff */
 
 //typedef void (* openVerticalBoxFun) (void* ui_interface, const char* label);
-typedef OpenVerticalBoxFun = Pointer<void> Function(Pointer<void> ui_interface, const Pointer<Utf8> label);
+typedef OpenVerticalBoxFun = Pointer<void> Function(Pointer<void> ui_interface, Pointer<Utf8> label);
 
 //typedef void (* closeBoxFun) (void* ui_interface);
 typedef CloseBoxFun = Pointer<void> Function(Pointer<void> ui_interface);
 
 class UiGlue extends Struct {
-    external OpenVerticalBoxFun openVerticalBoxFun;
-    external CloseBoxFun closeBoxFun;
+    external Pointer<UiGlue> uiInterface;
 }
 
 //typedef void (* metaDeclareFun) (void* ui_interface, const char* key, const char* value);
-typedef MetaDeclareFun = Pointer<void> Function(Pointer<void> ui_interface, const Pointer<Utf8> key, const Pointer<Utf8> value);
+typedef MetaDeclareFun = Pointer<void> Function(Pointer<void> ui_interface, Pointer<Utf8> key, Pointer<Utf8> value);
 class MetaGlue extends Struct {
-    external Pointer<void> metaInterface;
-    external MetaDeclareFun declare;
+    external Pointer<MetaGlue> metaInterface;
 }
