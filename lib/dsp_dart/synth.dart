@@ -1,14 +1,15 @@
 import 'dart:ffi';
-import 'dart:io' show Directory, Platform;
+import 'dart:io' show Directory;
 
-import 'package:ffi/ffi.dart';
 import 'package:path/path.dart' as path;
+
+import 'package:just_audio/just_audio.dart';
 
 import './api_types.dart';
 
-class DspApi {
+class Synth extends StreamAudioSource {
     static final libraryPath = path.join(
-        Directory.current.path, 'faust_c.dll');
+        Directory.current.path, 'assets', 'faust_c.dll');
 
     static late final DynamicLibrary dylib;
     static late final NewMyDsp newmydsp;
@@ -17,16 +18,21 @@ class DspApi {
     static late final ComputeMyDsp computemydsp;
     static late final DeleteMyDsp deletemydsp;
     static late final Pointer<MyDsp> mydsp;
-    static final int sample_rate = 44100;
+    static late final Pointer<UiGlue> uiInterface;
+    static const sampleRate = 44100;
+    static const bufferSize = 512;
+    static final List<List<double>> _buffer = List.filled(2,List.filled(bufferSize, 0.0));
 
-    static bool init(){
+    Synth();
+
+    bool initSynth(){
         if(loadDll()){
             return initializeDsp();
         }
         return false;
     }
 
-    static bool loadDll(){
+    bool loadDll(){
         // open library
         try {
             dylib = DynamicLibrary.open(libraryPath);
@@ -54,11 +60,29 @@ class DspApi {
         return true;
     }
 
-    static bool initializeDsp(){
+    bool initializeDsp(){
         mydsp = newmydsp();
-        initmydsp(mydsp, sample_rate);
+        print("mydsp before:");
+        print(mydsp);
+
+        initmydsp(mydsp, sampleRate);
+
+        print("mydsp after:");
+        print(mydsp);
+        
         //buildUserInterfacemydsp();
         return true;
     }
 
+    @override
+    Future<StreamAudioResponse> request([int? start, int? end]) async {
+        computemydsp(mydsp,bufferSize,[[]],_buffer);
+        return StreamAudioResponse(
+            sourceLength: bufferSize,
+            contentLength: bufferSize,
+            offset: 0,
+            stream: Stream.value(_buffer.sublist(0, bufferSize)),
+            contentType: 'audio/wav',
+        );
+    }
 }
