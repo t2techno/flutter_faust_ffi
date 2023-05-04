@@ -1,6 +1,9 @@
 import 'dart:ffi';
 
 import 'package:ffi/ffi.dart';
+
+// ignore_for_file: non_constant_identifier_names
+
 /* DSP Stuff
 
 typedef struct {
@@ -92,11 +95,11 @@ typedef OpenVerticalBoxFun = Pointer<void> Function(Pointer<void> ui_interface, 
 typedef CloseBoxFun = Pointer<void> Function(Pointer<void> ui_interface);
 
 class UiGlue extends Struct {
-    external Pointer<UiGlue> uiInterface;
+    external static Pointer<UiGlue> uiInterface;
 }
 
 //typedef void (* metaDeclareFun) (void* ui_interface, const char* key, const char* value);
 typedef MetaDeclareFun = Pointer<void> Function(Pointer<void> ui_interface, Pointer<Utf8> key, Pointer<Utf8> value);
 class MetaGlue extends Struct {
-    external Pointer<MetaGlue> metaInterface;
+    external static Pointer<MetaGlue> metaInterface;
 }
