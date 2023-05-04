@@ -25,7 +25,7 @@ typedef struct {
 } mydsp;
 */
 class MyDsp extends Struct {
-  external Pointer<Int32> iVec0; //int iVec0[2];
+  external Array<Int32> iVec0(2); //int iVec0[2];
 
   @Int32()
   external int fSampleRate; //int fSampleRate;
