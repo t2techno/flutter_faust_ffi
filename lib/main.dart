@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import './dsp_dart/api_types.dart';
+import './dsp_dart/audio_player.dart';
 
 void main() {
   runApp(const MyApp());
@@ -50,6 +50,22 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   int _counter = 0;
+  final MyAudioPlayer _player = MyAudioPlayer();
+
+  @override
+  void initState() {
+    startPlayer();
+    super.initState();
+  }
+
+  Future<void> startPlayer () async {
+    if(await _player.init()){
+      print("successful init, time to make sound");
+      _player.play();
+    } else {
+      print("le fail");
+    }
+  }
 
   void _incrementCounter() {
     setState(() {
