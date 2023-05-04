@@ -3,11 +3,9 @@ import 'dart:io' show Directory;
 
 import 'package:path/path.dart' as path;
 
-import 'package:just_audio/just_audio.dart';
-
 import './api_types.dart';
 
-class Synth extends StreamAudioSource {
+class Synth {
     static final libraryPath = path.join(
         Directory.current.path, 'assets', 'faust_c.dll');
 
@@ -19,11 +17,15 @@ class Synth extends StreamAudioSource {
     static late final DeleteMyDsp deletemydsp;
     static late final Pointer<MyDsp> mydsp;
     static late final Pointer<UiGlue> uiInterface;
-    static const sampleRate = 44100;
-    static const bufferSize = 512;
-    static final List<List<double>> _buffer = List.filled(2,List.filled(bufferSize, 0.0));
+    static const _sampleRate;
+    static const _bufferSize;
+    static final List<List<double>> _buffer;
 
-    Synth();
+    Synth(int sampleRate, int bufferSize){
+        _sampleRate = sampleRate;
+        _bufferSize = bufferSize;
+        _buffer = List.filled(2,List.filled(_bufferSize, 0.0));
+    }
 
     bool initSynth(){
         if(loadDll()){
@@ -74,15 +76,15 @@ class Synth extends StreamAudioSource {
         return true;
     }
 
-    @override
-    Future<StreamAudioResponse> request([int? start, int? end]) async {
-        computemydsp(mydsp,bufferSize,[[]],_buffer);
-        return StreamAudioResponse(
-            sourceLength: bufferSize,
-            contentLength: bufferSize,
-            offset: 0,
-            stream: Stream.value(_buffer.sublist(0, bufferSize)),
-            contentType: 'audio/wav',
-        );
+    void compute(){
+        computemydsp(mydsp,_bufferSize,Array<Array<double>>(),_buffer);
+    }
+
+    get Array<double> leftChannel {
+        return _buffer[0];
+    }
+
+    get Array<double> rightChannel {
+        return _buffer[1];
     }
 }

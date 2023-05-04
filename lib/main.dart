@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import './dsp_dart/audio_player.dart';
+import './dsp_dart/stereo_player.dart';
 
 void main() {
   runApp(const MyApp());
@@ -50,7 +50,7 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   int _counter = 0;
-  final MyAudioPlayer _player = MyAudioPlayer();
+  final StereoPlayer _player = StereoPlayer();
 
   @override
   void initState() {
