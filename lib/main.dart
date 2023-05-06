@@ -58,7 +58,7 @@ class _MyHomePageState extends State<MyHomePage> {
     super.initState();
   }
 
-  Future<void> startPlayer () async {
+  Future<void> startPlayer() async {
     if(await _player.init()){
       print("successful init, time to make sound");
       _player.play();

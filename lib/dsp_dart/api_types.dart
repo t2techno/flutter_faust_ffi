@@ -1,6 +1,7 @@
 import 'dart:ffi';
-
 import 'package:ffi/ffi.dart';
+import 'dart:typed_data';
+
 
 // ignore_for_file: non_constant_identifier_names
 
@@ -25,7 +26,8 @@ typedef struct {
 } mydsp;
 */
 class MyDsp extends Struct {
-  external Array<Int32> iVec0(2); //int iVec0[2];
+  @Array(2)
+  external Array<Int32> iVec0; //int iVec0[2];
 
   @Int32()
   external int fSampleRate; //int fSampleRate;
@@ -33,14 +35,17 @@ class MyDsp extends Struct {
   @Float()
   external double fConst1; //float fConst1;
 
-  external Pointer<Float> fRec0; //float fRec0[2];
+  @Array(2)
+  external Array<Float> fRec0; //float fRec0[2];
 
-  external Pointer<Float> fVec1; //float fVec1[2];
+  @Array(2)
+  external Array<Float> fVec1; //float fVec1[2];
 
   @Int32()
   external int IOTA0; //int IOTA0;
   
-  external Pointer<Float>fVec2; //float fVec2[512];
+  @Array(512)
+  external Array<Float> fVec2; //float fVec2[512];
   
   @Int32()
   external int iConst4;// int iConst4;
@@ -60,7 +65,8 @@ class MyDsp extends Struct {
   @Float()
   external double fConst10; // float fConst10;
 
-  external Pointer<Float> fRec1fRec1; // float fRec1[2];
+  @Array(2)
+  external Array<Float> fRec1fRec1; // float fRec1[2];
 
   @Float()
   external double fConst11;// float fConst11;
@@ -77,10 +83,8 @@ typedef InitMyDsp = Pointer<Void> Function(Pointer<MyDsp> dsp, int sample_rate);
 typedef BuildUserInterfaceMyDsp = Pointer<Void> Function(Pointer<MyDsp> dsp, Pointer<UiGlue> ui_interface);
 
 // 	void computemydsp(mydsp* dsp, int count, FAUSTFLOAT** RESTRICT inputs, FAUSTFLOAT** RESTRICT outputs);
-typedef AudioIOArrayNative = Pointer<Pointer<Float>>;
-typedef AudioIOArray = Pointer<Pointer<Float>>;
-typedef ComputeMyDspNative = Pointer<Void> Function(Pointer<MyDsp> dsp, Int32 count, AudioIOArrayNative inputs, AudioIOArrayNative outputs);
-typedef ComputeMyDsp = Pointer<Void> Function(Pointer<MyDsp> dsp, int count, AudioIOArray inputs, AudioIOArray outputs);
+typedef ComputeMyDspNative = Pointer<Void> Function(Pointer<MyDsp> dsp, Int32 count, Pointer<Pointer<Float>> inputs, Pointer<Pointer<Float>> outputs);
+typedef ComputeMyDsp = Pointer<Void> Function(Pointer<MyDsp> dsp, int count, Pointer<Pointer<Float>> inputs, Pointer<Pointer<Float>> outputs);
 
 // 	void deletemydsp(mydsp* dsp)
 typedef DeleteMyDsp = Pointer<Void> Function(Pointer<MyDsp> dsp);
