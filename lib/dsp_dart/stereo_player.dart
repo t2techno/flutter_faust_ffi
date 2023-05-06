@@ -1,14 +1,17 @@
 import 'package:just_audio/just_audio.dart';
+import 'dart:async';
+import 'dart:typed_data';
+
 
 import './synth.dart';
 
 class StereoPlayer {
-    static const BUFFER_SIZE = 512;
-    static const SAMPLE_RATE = 44100;
-    static tick = Duration(milliseconds:((1/SAMPLE_RATE)*1000));
-    static final SynthAudioStreamer rChannel = SynthAudioStreamer(BUFFER_SIZE);
-    static final SynthAudioStreamer lChannel = SynthAudioStreamer(BUFFER_SIZE);
-    static final Synth synth = Synth();
+    static const _bufferSize = 512;
+    static const _sampleRate = 44100;
+    static const tick = Duration(microseconds:1000000~/_sampleRate);
+    static final SynthAudioStreamer rChannel = SynthAudioStreamer(_bufferSize);
+    static final SynthAudioStreamer lChannel = SynthAudioStreamer(_bufferSize);
+    static final Synth synth = Synth(_bufferSize,_sampleRate);
 
     static bool isPlaying = false;
 
@@ -16,24 +19,25 @@ class StereoPlayer {
 
     Future<bool> init() async {
         if(synth.initSynth()){
-            return await setAudioSource();
+            return await lChannel.connectAudioSource() &&
+                   await rChannel.connectAudioSource();
         }
         return false;
     }
 
     void play(){
         synthLoop();
-        rChannel.play();
         lChannel.play();
+        rChannel.play();
     }
 
     void synthLoop() async {
         print('beginning to play');
-        await Timer.periodic(tick, (Timer t) => {
+        Timer.periodic(tick, (Timer t) {
             if(isPlaying){
-                //synth.compute
-                //rChannel.buffer
-                //lChannel.buffer
+                synth.compute();
+                lChannel.buffer  = synth.leftChannel;
+                rChannel.buffer  = synth.rightChannel;
             } else {
                 print('finished playing');
             }
@@ -41,41 +45,16 @@ class StereoPlayer {
     }
 }
 
-class SynthAudioStream extends StreamAudioSource {
-    ByteData _buffer;
-
-    SynthAudioStream(int buffer_size){
-        _buffer = ByteData(buffer_size);
-        super();
-    }
-
-    set buffer(List<double> data){
-        _buffer.setFloat64(data);
-    }
-
-    @override
-    Future<StreamAudioResponse> request([int? start, int? end]) async {
-        return StreamAudioResponse(
-            sourceLength: bufferSize,
-            contentLength: bufferSize,
-            offset: 0,
-            stream: Stream.value(_buffer.asFloat32List()),
-            contentType: 'audio/wav',
-        );
-    }
-}
-
-SynthAudioStreamer extends AudioPlayer {
-    final SynthAudioStream audioStream;
-    SynthAudioStreamer(int buffer_size){
-        audioStream = SynthAudioStream(buffer_size);
-        super();
+class SynthAudioStreamer extends AudioPlayer {
+    late final SynthAudioStream audioStream;
+    SynthAudioStreamer(int bufferSize){
+        audioStream = SynthAudioStream(bufferSize);
     }
 
     Future<bool> connectAudioSource() async {
         // Catching errors at load time
         try {
-            await this.setAudioSource(audioStream);
+            await setAudioSource(audioStream);
             return true;
         } on PlayerException catch (e) {
             // iOS/macOS: maps to NSError.code
@@ -100,7 +79,32 @@ SynthAudioStreamer extends AudioPlayer {
         return false;
     }
 
-    set buffer(List<double> data){
+    set buffer(Float32List data){
         audioStream.buffer = data;
+    }
+}
+
+
+class SynthAudioStream extends StreamAudioSource {
+    late ByteData _buffer;
+
+    SynthAudioStream(int bufferSize){
+        // 32-bit floats
+        _buffer = ByteData(bufferSize*4);
+    }
+
+    set buffer(Float32List data){
+        _buffer = ByteData.sublistView(data);
+    }
+
+    @override
+    Future<StreamAudioResponse> request([int? start, int? end]) async {
+        return StreamAudioResponse(
+            sourceLength:  _buffer.lengthInBytes,
+            contentLength: _buffer.lengthInBytes,
+            offset: 0,
+            stream: Stream.value(_buffer.buffer.asInt32List()),
+            contentType: 'audio/wav',
+        );
     }
 }
