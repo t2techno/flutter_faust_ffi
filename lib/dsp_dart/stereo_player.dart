@@ -11,37 +11,35 @@ class StereoPlayer {
     static const tick = Duration(microseconds:1000000~/_sampleRate);
     static final SynthAudioStreamer rChannel = SynthAudioStreamer(_bufferSize);
     static final SynthAudioStreamer lChannel = SynthAudioStreamer(_bufferSize);
-    static final Synth synth = Synth(_bufferSize,_sampleRate);
+    static final Synth synth = Synth(_bufferSize, _sampleRate);
 
     static bool isPlaying = false;
 
     StereoPlayer();
 
     Future<bool> init() async {
-        if(synth.initSynth()){
-            return await lChannel.connectAudioSource() &&
-                   await rChannel.connectAudioSource();
-        }
-        return false;
+        return await lChannel.connectAudioSource() &&
+                await rChannel.connectAudioSource();
     }
 
     void play(){
+        isPlaying = true;
         synthLoop();
         lChannel.play();
         rChannel.play();
     }
 
     void synthLoop() async {
-        print('beginning to play');
-        Timer.periodic(tick, (Timer t) {
-            if(isPlaying){
+        if(isPlaying){
+            Timer.periodic(tick, (Timer t) {
                 synth.compute();
                 lChannel.buffer  = synth.leftChannel;
                 rChannel.buffer  = synth.rightChannel;
-            } else {
-                print('finished playing');
-            }
-        });
+                if(!isPlaying){t.cancel();}
+            });
+        } else {
+            print('Not playing');
+        }
     }
 }
 
@@ -54,6 +52,7 @@ class SynthAudioStreamer extends AudioPlayer {
     Future<bool> connectAudioSource() async {
         // Catching errors at load time
         try {
+            print("setting audio source");
             await setAudioSource(audioStream);
             return true;
         } on PlayerException catch (e) {
@@ -86,22 +85,25 @@ class SynthAudioStreamer extends AudioPlayer {
 
 
 class SynthAudioStream extends StreamAudioSource {
+    static const bytesPerEl = 4;
     late ByteData _buffer;
 
     SynthAudioStream(int bufferSize){
         // 32-bit floats
-        _buffer = ByteData(bufferSize*4);
+        _buffer = ByteData(bufferSize*bytesPerEl);
     }
 
     set buffer(Float32List data){
         _buffer = ByteData.sublistView(data);
     }
 
+    int get bufferSize => (_buffer.lengthInBytes)~/bytesPerEl;
+
     @override
     Future<StreamAudioResponse> request([int? start, int? end]) async {
         return StreamAudioResponse(
-            sourceLength:  _buffer.lengthInBytes,
-            contentLength: _buffer.lengthInBytes,
+            sourceLength:  bufferSize,
+            contentLength: bufferSize,
             offset: 0,
             stream: Stream.value(_buffer.buffer.asInt32List()),
             contentType: 'audio/wav',
