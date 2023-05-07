@@ -32,6 +32,16 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^2.0.0
+  ffigen: ^7.2.11
+  
+
+ffigen:
+    name: 'Faust'
+    description: 'Basic Faust oscillator'
+    output: 'lib/dsp_dart/generated_bindings.dart'
+    headers:
+      entry-points:
+        - 'dsp_c/FaustFlutterC.h'
 
 flutter:
   uses-material-design: true
