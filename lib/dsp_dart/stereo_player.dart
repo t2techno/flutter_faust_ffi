@@ -8,7 +8,7 @@ import './synth.dart';
 class StereoPlayer {
     static const _bufferSize = 512;
     static const _sampleRate = 44100;
-    static const tick = Duration(microseconds:1000000~/_sampleRate);
+    
     static final SynthAudioStreamer rChannel = SynthAudioStreamer(_bufferSize);
     static final SynthAudioStreamer lChannel = SynthAudioStreamer(_bufferSize);
     static final Synth synth = Synth(_bufferSize, _sampleRate);
@@ -22,25 +22,7 @@ class StereoPlayer {
                 await rChannel.connectAudioSource();
     }
 
-    void play(){
-        isPlaying = true;
-        synthLoop();
-        lChannel.play();
-        rChannel.play();
-    }
-
-    void synthLoop() async {
-        if(isPlaying){
-            Timer.periodic(tick, (Timer t) {
-                synth.compute();
-                lChannel.buffer  = synth.leftChannel;
-                rChannel.buffer  = synth.rightChannel;
-                if(!isPlaying){t.cancel();}
-            });
-        } else {
-            print('Not playing');
-        }
-    }
+    
 }
 
 class SynthAudioStreamer extends AudioPlayer {
