@@ -47,7 +47,6 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> playSynth() async {
-    _synth.isPlaying = true;
     await for (final value in _synth.play()) {
       //value = List<Float32List>
       print('.');

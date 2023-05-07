@@ -80,6 +80,7 @@ class Synth {
     // ToDo: Is it more efficient to yield pointers and defer
     //       casting/splitting channel to listener?
     Stream<List<Float32List>> play() async* {
+        isPlaying=true;
         while(isPlaying){
             compute();
             yield [leftChannel, rightChannel];
