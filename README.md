@@ -10,6 +10,27 @@ In /dsp_c:
   <li>You'll find the generated dll file in dsp_c/Debug/</li>
 </ol>
 
-The next step was creating the C-Native and Dart typedefs for dsp, gui, and metadata class objects and methods being used from the c code, found in lib/dsp_dart/api_types.dart
+The next step was creating the C-Native and Dart typedefs for dsp, gui, and metadata class objects and methods being used from the c code, found in lib/dsp_dart/api_types.dart.</br>
+  * I ended up using ffigen output for the final interface between Faust and Dart
 
-TODO: My next step is going to be utilizing those types to create a class object that will allow me to instantiate and run my faust dsp object.
+<ol>
+  <li>Main.dart: simply contains a basic play/pause button with textual feedback letting you know if it's supposed to be playing</li>
+  <li>dsp_dart<ul>
+    <li>api_types.dart: my hand written typedefs for interfacing with Faust code, leavaing causing it's easy to read </li>
+    <li>generated_bindings.dart: The ffigen output file from running against /dsp_c/FaustFlutterC.h</li>
+    <li>synth.dart: Class that holds all actual dsp related code<ul>
+      <li>Constructor takes bufferSize and Sample rate</li>
+      <li>synth.play()<ul>
+        <li>Sets isPlaying to true and runs while loop _sampleRate times per second</li>
+        <li>runs compute to fill output buffers with audio data</li>
+        <li>yields a List<Float32List> of size two for the left and right channels</li>
+        <li>isPlaying is toggled back to false from the play/pause state change in main.dart</li>
+      </ul></li>
+      <li>ToDo: Need to ensure destructor is called properly on calloc pointers created for buffers</li>
+    </ul></li>
+    <li>stereo_player.dart:<ul> 
+      <li>Currently attempting to use just_audio to wrap the audio playing process in this class</li>
+      <li>Not actually using at the moment.</li>
+    </ul></li>
+  </ul></li>
+</ol>
