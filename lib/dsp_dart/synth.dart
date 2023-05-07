@@ -6,102 +6,69 @@ import 'dart:io' show Directory;
 import 'package:path/path.dart' as path;
 
 import './api_types.dart';
+import './generated_bindings.dart';
 
 class Synth {
-    static final libraryPath = path.join(
-        Directory.current.path, 'assets', 'faust_c.dll');
-
-    // imported Faust code
-    static late final DynamicLibrary dylib;
-
-    // Methods from Faust Code
-    static late final NewMyDsp newmydsp;
-    static late final InitMyDsp initmydsp;
-    static late final BuildUserInterfaceMyDsp buildUserInterfacemydsp;
-    static late final ComputeMyDsp computemydsp;
-    static late final DeleteMyDsp deletemydsp;
-
     // Objects from Faust Code
     static late final Pointer<MyDsp> mydsp;
-    static late final Pointer<UiGlue> uiInterface;
 
     // Constants
     static late final int _bufferSize;
     static late final int _sampleRate;
 
     // only need the first two channels
-    //static late final List<Float32List> _inputBuffer;
-    //static late final List<Float32List> _buffer;
     static late final Pointer<Pointer<Float>> _inputBuffer;
     static late final Pointer<Pointer<Float>> _buffer;
+
+    // generated binding object interfacing c code
+    static late final _impl;
+    static final libraryPath = path.join(
+        Directory.current.path, 'assets', 'faust_c.dll');
 
     Synth(int bufferSize, int sampleRate){
         _sampleRate  = sampleRate;
         _bufferSize  = bufferSize;
+        
+        allocateBuffers();
+
+        _impl = Faust(DynamicLibrary.open(libraryPath));
+        initializeDsp();
+    }
+
+    void allocateBuffers(){
+        var inL  = calloc<Float>(_bufferSize);
+        var inR  = calloc<Float>(_bufferSize);
+        var outL = calloc<Float>(_bufferSize);
+        var outR = calloc<Float>(_bufferSize);
 
         _inputBuffer = calloc<Pointer<Float>>(2);
-        _buffer      = calloc<Pointer<Float>>(2);
+        _inputBuffer.value = Pointer.fromAddress(inL.address);
+        _inputBuffer.elementAt(1).value = Pointer.fromAddress(inR.address);
+
+        _buffer = calloc<Pointer<Float>>(2);
+        _buffer.value = Pointer.fromAddress(outL.address);
+        _buffer.elementAt(1).value = Pointer.fromAddress(outR.address);
     }
 
-    bool initSynth(){
-        if(loadDll()){
-            return initializeDsp();
+    void initializeDsp(){
+        mydsp = _impl.newmydsp();
+        if(mydsp != nullptr){
+            print('dsp created');
+            _impl.initmydsp(mydsp, _sampleRate);
         }
-        return false;
-    }
-
-    bool loadDll(){
-        // open library
-        try {
-            dylib = DynamicLibrary.open(libraryPath);
-        } catch(e) {
-            print('There was an error loading the dll: $e');
-            return false;
-        }
-
-        // get references to c functions
-        try {
-            newmydsp = 
-                dylib.lookupFunction<NewMyDsp,NewMyDsp>('newmydsp');
-            initmydsp = 
-                dylib.lookupFunction<InitMyDspNative,InitMyDsp>('initmydsp');
-            buildUserInterfacemydsp = 
-                dylib.lookupFunction<BuildUserInterfaceMyDsp,BuildUserInterfaceMyDsp>('buildUserInterfacemydsp');
-            computemydsp = 
-                dylib.lookupFunction<ComputeMyDspNative,ComputeMyDsp>('computemydsp');
-            deletemydsp = 
-                dylib.lookupFunction<DeleteMyDsp,DeleteMyDsp>('deletemydsp');
-        } catch(e){
-            print('There was an error looking up a C function: $e');
-            return false;
-        }
-        return true;
-    }
-
-    bool initializeDsp(){
-        mydsp = newmydsp();
-        print("mydsp before:");
-        print(mydsp);
-
-        initmydsp(mydsp, _sampleRate);
-
-        print("mydsp after:");
-        print(mydsp);
-        
-        //buildUserInterfacemydsp();
-        return true;
+        //_impl.buildUserInterfacemydsp();
     }
 
     // https://dart.dev/articles/libraries/creating-streams
     void compute(){
-        computemydsp(mydsp,_bufferSize,_inputBuffer,_buffer);
+        _impl.computemydsp(mydsp, _bufferSize, _inputBuffer, _buffer);
     }
 
     Float32List get leftChannel {
-        return Float32List(_buffer.elementAt(0));
+        return _buffer[0].asTypedList(_bufferSize);
     }
 
     Float32List get rightChannel {
-        return Float32List(_buffer.elementAt(1));
+        return _buffer[1].asTypedList(_bufferSize);
     }
 }
