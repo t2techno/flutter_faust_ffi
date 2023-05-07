@@ -2,6 +2,7 @@ import 'dart:ffi';
 import 'package:ffi/ffi.dart';
 import 'dart:typed_data';
 import 'dart:io' show Directory;
+import 'dart:async';
 
 import 'package:path/path.dart' as path;
 
@@ -9,12 +10,15 @@ import './api_types.dart';
 import './generated_bindings.dart';
 
 class Synth {
+    var isPlaying = false;
+
     // Objects from Faust Code
     static late final Pointer<MyDsp> mydsp;
 
     // Constants
     static late final int _bufferSize;
     static late final int _sampleRate;
+    static late final Duration tick;
 
     // only need the first two channels
     static late final Pointer<Pointer<Float>> _inputBuffer;
@@ -28,6 +32,7 @@ class Synth {
     Synth(int bufferSize, int sampleRate){
         _sampleRate  = sampleRate;
         _bufferSize  = bufferSize;
+        tick = Duration(microseconds:1000000~/_sampleRate);
         
         allocateBuffers();
 
@@ -56,10 +61,10 @@ class Synth {
             print('dsp created');
             _impl.initmydsp(mydsp, _sampleRate);
         }
+        // currently not using an interface with faust
         //_impl.buildUserInterfacemydsp();
     }
 
-    // https://dart.dev/articles/libraries/creating-streams
     void compute(){
         _impl.computemydsp(mydsp, _bufferSize, _inputBuffer, _buffer);
     }
@@ -70,5 +75,15 @@ class Synth {
 
     Float32List get rightChannel {
         return _buffer[1].asTypedList(_bufferSize);
+    }
+
+    // ToDo: Is it more efficient to yield pointers and defer
+    //       casting/splitting channel to listener?
+    Stream<List<Float32List>> play() async* {
+        while(isPlaying){
+            compute();
+            yield [leftChannel, rightChannel];
+            await Future.delayed(tick);
+        }
     }
 }
