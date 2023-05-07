@@ -16,7 +16,7 @@ The next step was creating the C-Native and Dart typedefs for dsp, gui, and meta
 <ol>
   <li>Main.dart: simply contains a basic play/pause button with textual feedback letting you know if it's supposed to be playing</li>
   <li>dsp_dart<ul>
-    <li>api_types.dart: my hand written typedefs for interfacing with Faust code, leavaing causing it's easy to read </li>
+    <li>api_types.dart: my hand written typedefs for interfacing with Faust code, leaving for now as it's easy to read.</li>
     <li>generated_bindings.dart: The ffigen output file from running against /dsp_c/FaustFlutterC.h</li>
     <li>synth.dart: Class that holds all actual dsp related code<ul>
       <li>Constructor takes bufferSize and Sample rate</li>
