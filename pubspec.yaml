@@ -42,6 +42,8 @@ ffigen:
     headers:
       entry-points:
         - 'dsp_c/FaustFlutterC.h'
+      include-directives:  
+        - '**dsp_c/*.h'
 
 flutter:
   uses-material-design: true
