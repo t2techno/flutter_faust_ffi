@@ -10,7 +10,7 @@ import './api_types.dart';
 import './generated_bindings.dart';
 
 class Synth {
-    var isPlaying = false;
+    static var isPlaying = false;
 
     // Objects from Faust Code
     static late final Pointer<MyDsp> mydsp;
@@ -69,13 +69,8 @@ class Synth {
         _impl.computemydsp(mydsp, _bufferSize, _inputBuffer, _buffer);
     }
 
-    Float32List get leftChannel {
-        return _buffer[0].asTypedList(_bufferSize);
-    }
-
-    Float32List get rightChannel {
-        return _buffer[1].asTypedList(_bufferSize);
-    }
+    Float32List get leftChannel  => _buffer[0].asTypedList(_bufferSize);
+    Float32List get rightChannel => _buffer[1].asTypedList(_bufferSize);
 
     // ToDo: Is it more efficient to yield pointers and defer
     //       casting/splitting channel to listener?
@@ -86,5 +81,9 @@ class Synth {
             yield [leftChannel, rightChannel];
             await Future.delayed(tick);
         }
+    }
+
+    void stopPlaying(){
+        isPlaying = false;
     }
 }

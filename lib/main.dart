@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import './dsp_dart/synth.dart';
+import './dsp_dart/stereo_player.dart';
 
 void main() {
   runApp(const MyApp());
@@ -30,27 +30,18 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  static const _bufferSize = 512;
-  static const _sampleRate = 44100;
-  final Synth _synth = Synth(_bufferSize,_sampleRate);
+  final StereoPlayer _player = StereoPlayer();
   bool _gate = false;
 
   void _toggleGate() {
     setState(() {
       _gate= !_gate;
       if(_gate){
-        playSynth();
+        startPlayer();
       } else {
-        _synth.isPlaying = false;
+        _player.stop();
       }
     });
-  }
-
-  Future<void> playSynth() async {
-    await for (final value in _synth.play()) {
-      //value = List<Float32List>
-      print('.');
-    }
   }
 
   @override
@@ -80,5 +71,14 @@ class _MyHomePageState extends State<MyHomePage> {
                          const Icon(Icons.play_circle),
       ),
     );
+  }
+
+  void startPlayer() async {
+    if(await _player.init()){
+      _player.play();
+      return;
+    }
+
+    print("failed to start player");
   }
 }
