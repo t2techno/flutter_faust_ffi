@@ -36,12 +36,19 @@ class _MyHomePageState extends State<MyHomePage> {
   void _toggleGate() {
     setState(() {
       _gate= !_gate;
-      if(_gate){
+    });
+
+    if(_gate){
         startPlayer();
       } else {
         _player.stop();
       }
-    });
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
   }
 
   @override
@@ -74,11 +81,11 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void startPlayer() async {
-    if(await _player.init()){
-      _player.play();
-      return;
+    if(!_player.isReady){
+        if(!await _player.init()){
+          print("failed to start player");
+        }
     }
-
-    print("failed to start player");
+    _player.play();
   }
 }

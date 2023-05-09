@@ -8,27 +8,35 @@ import './synth.dart';
 class StereoPlayer {
     static const _bufferSize = 512;
     static const _sampleRate = 44100;
-    static final Synth synth = Synth(_bufferSize, _sampleRate);
+    static const signedInt32Max = (1 << 31)-1;
+    bool isReady = false;
+    Synth synth = Synth(_bufferSize, _sampleRate);
 
-    static final SynthAudioStream lChannel = SynthAudioStream(synth, _bufferSize, true);
-    static final SynthAudioStream rChannel = SynthAudioStream(synth, _bufferSize, false);
-    static final AudioPlayer lPlayer = AudioPlayer();
-    static final AudioPlayer rPlayer = AudioPlayer();
+    final SynthAudioStream lChannel = SynthAudioStream(List.filled(0,_bufferSize));
+    final SynthAudioStream rChannel = SynthAudioStream(List.filled(0,_bufferSize));
+    final AudioPlayer lPlayer = AudioPlayer();
+    final AudioPlayer rPlayer = AudioPlayer();
 
 
-    static bool isPlaying = false;
+    bool isPlaying = false;
 
     StereoPlayer();
 
     Future<bool> init() async {
-        return  await connectAudioSource(lPlayer, lChannel) &&
-                await connectAudioSource(rPlayer, rChannel);
+        synth.initSynth();
+        startSynth();
+        isReady = await connectAudioSource(lPlayer, lChannel) &&
+                await connectAudioSource(rPlayer, rChannel); 
+        print('player readyness: $isReady');
+        return isReady;
     }
 
     Future<bool> connectAudioSource(AudioPlayer player, StreamAudioSource stream) async {
         // Catching errors at load time
         try {
+            print("connecting shit");
             await player.setAudioSource(stream);
+            print("shit connected");
             return true;
         } on PlayerException catch (e) {
             // iOS/macOS: maps to NSError.code
@@ -50,6 +58,7 @@ class StereoPlayer {
             // Fallback for all other errors
             print('An error occured: $e');
         }
+        print("shit not connected :(");
         return false;
     }
     
@@ -59,6 +68,16 @@ class StereoPlayer {
 
         listenTo(lPlayer);
         listenTo(rPlayer);
+    }
+
+    void startSynth() async {
+        synth.play().listen((List<Float32List> data) {
+            //lChannel.bytes = data[0].map((f) => (f*signedInt32Max).toInt()).toList();
+            //rChannel.bytes = data[1].map((f) => (f*signedInt32Max).toInt()).toList();
+        }, onError: (Object e, StackTrace st) {
+            print('An error occurred: $e');
+            print('stacktrace: $st');
+        });
     }
 
     void listenTo(AudioPlayer ap){
@@ -77,39 +96,29 @@ class StereoPlayer {
         await rPlayer.stop();
         synth.stopPlaying();
     }
+
+    void dispose(){
+        lPlayer.stop();
+        rPlayer.stop();
+        synth.dispose();
+    }
 }
 
 class SynthAudioStream extends StreamAudioSource {
-    static const signedInt32Max = 1 << 31;
-    late int _bufferSize;
-    late bool _isLeft;
-    late Synth _synth;
+    final List<int> bytes;
 
-    SynthAudioStream(Synth synth, int bufferSize, bool isLeft){
-        // 32-bit floats
-        _bufferSize = bufferSize;
-        _isLeft = isLeft;
-        _synth = synth;
-    }
+    SynthAudioStream(this.bytes);
 
     @override
     Future<StreamAudioResponse> request([int? start, int? end]) async {
+        start ??= 0;
+        end ??= bytes.length;
         return StreamAudioResponse(
-            sourceLength:  _bufferSize,
-            contentLength: _bufferSize,
-            offset: 0,
-            stream: play(),
-            contentType: 'audio/mp3',
+            sourceLength: bytes.length,
+            contentLength: end - start,
+            offset: start,
+            stream: Stream.value(bytes.sublist(start, end)),
+            contentType: 'audio/wave',
         );
-    }
-
-    Stream<List<int>> play() async* {
-        await for(final List<Float32List> value in _synth.play()){
-            if(_isLeft){
-                yield value[0].map((f) => (f*signedInt32Max).toInt()).toList();
-                continue;
-            }
-            yield value[1].map((f) => (f*signedInt32Max).toInt()).toList();
-        }
     }
 }
