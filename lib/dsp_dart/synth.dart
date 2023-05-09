@@ -51,7 +51,7 @@ class Synth {
         }
         else if (Platform.isWindows) {
             print('opening on Windows');
-            _dylib = DynamicLibrary.open('../../assets/$faustFile.dll');
+            _dylib = DynamicLibrary.open(Directory.current.path + '/assets/$faustFile.dll');
         } else {
             print("Sorry, I don't own a Mac :(");
             return;
