@@ -32,9 +32,9 @@ class MyAudioPlayer {
     Future<bool> connectAudioSource(AudioPlayer player, StreamAudioSource stream) async {
         // Catching errors at load time
         try {
-            print("connecting shit");
+            print("connecting audio source to player");
             await player.setAudioSource(stream);
-            print("shit connected");
+            print("audio source connected");
             return true;
         } on PlayerException catch (e) {
             // iOS/macOS: maps to NSError.code
@@ -56,7 +56,7 @@ class MyAudioPlayer {
             // Fallback for all other errors
             print('An error occured: $e');
         }
-        print("shit not connected :(");
+        print("audio source not connected.");
         return false;
     }
     
