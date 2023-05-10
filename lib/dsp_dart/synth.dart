@@ -29,7 +29,8 @@ class Synth {
     static late final Pointer<Float> _outR;
     static late final Pointer<Pointer<Float>> _buffer;
     static final BytesBuilder _bb = BytesBuilder();
-    static final WaveFileHeader _waveHeader = new WaveFileHeader();
+    static final WaveFile _waveFile = new WaveFile();
+    static final BytesBuilder _recorder = BytesBuilder();
 
     // generated binding object interfacing c code
     static late final _impl;
@@ -40,7 +41,7 @@ class Synth {
         _sampleRate  = sampleRate;
         _bufferSize  = bufferSize;
         _tick = Duration(microseconds:1000000~/_sampleRate);
-        _waveHeader.buildHeader(sampleRate, bufferSize);
+        _waveFile.buildHeader(sampleRate: sampleRate, dataSize: bufferSize);
     }
 
     void initSynth() {
@@ -95,8 +96,8 @@ class Synth {
         print("made");
     }
 
-    Future<void> compute() async {
-        await _impl.computemydsp(_mydsp, _bufferSize, _inputBuffer, _buffer);
+    compute() {
+        _impl.computemydsp(_mydsp, _bufferSize, _inputBuffer, _buffer);
     }
 
     // casting buffers as more convenient type
@@ -123,10 +124,8 @@ class Synth {
         Float32List left  = leftFloats;
         Float32List right = rightFloats;
         for(var i=0; i<_bufferSize; i++){
-            var l = (left[i]* signedInt16Max).toInt();
-            var r = (right[i]*signedInt16Max).toInt();
-            _bb..add(int16bytes(l))
-               ..add(int16bytes(r));
+            _bb..add(int16bytes((left[i]* signedInt16Max).toInt()))
+               ..add(int16bytes((right[i]*signedInt16Max).toInt()));
         }
         return _bb.takeBytes();
     }
@@ -138,15 +137,23 @@ class Synth {
     Stream<Uint8List> play() async* {
         _isPlaying=true;
         while(_isPlaying){
-            await compute();
-            _bb.add(_waveHeader.getHeader());
-            yield interleavedIntBytes;
+            compute();
+            _recorder.add(interleavedIntBytes);
+            print('.');
+            //_bb.add(_waveHeader.getHeader());
+            //yield interleavedIntBytes;
             await Future.delayed(_tick);
         }
     }
 
     void stopPlaying(){
         _isPlaying = false;
+    }
+
+    Future<void> writeSynthAudio() async {
+        print('writing file....');
+        var fileSize = await _waveFile.createWaveFile(_recorder.takeBytes());
+        print('file writing complete! Wrote ${fileSize/1000} KB');
     }
 
     void dispose(){

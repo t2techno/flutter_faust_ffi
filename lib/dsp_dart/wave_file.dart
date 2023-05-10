@@ -1,18 +1,19 @@
 import 'dart:typed_data';
 import 'dart:convert';
+import 'dart:io';
 
 // http://soundfile.sapp.org/doc/WaveFormat/
 
-class WaveFileHeader{
+class WaveFile{
 
     // Can open this up for my customization later
-    WaveFileHeader();
+    WaveFile();
 
     BytesBuilder header = BytesBuilder();
     final utf8Encoder = utf8.encoder;
 
     // ToDo: Find best way to use global variables like samplerate/buffersize
-    late final int _bufferSize;
+    late int _dataSize;
 
     // 44 for PCM
     late int _wavHeaderSize;
@@ -21,7 +22,7 @@ class WaveFileHeader{
     static const _strRiff = 'RIFF';
 
     // Total file size in bytes (minues the 8 bytes of this and the previous field)
-    late final int _chunkSize;
+    late int _chunkSize;
 
     // Size of the fmt section. Doing 32-bit float, 
     // have to populate an extra 2 bytes for cbSize field extension
@@ -37,10 +38,10 @@ class WaveFileHeader{
     //0x0003	WAVE_FORMAT_IEEE_FLOAT	IEEE float
     late int _format;
     static const _numChannels = 2;
-    late final int _sampleRate;
+    late int _sampleRate;
 
     //byteRate = SampleRate * NumChannels * BitsPerSample/8
-    late final int _byteRate;
+    late int _byteRate;
 
     //blockAlign = NumChannels * BitsPerSample/8
     final _blockAlign = (_numChannels * _bitsPerSample)~/8;
@@ -53,9 +54,10 @@ class WaveFileHeader{
     static const _strData = 'data';
 
     // _subchunk2Size =  NumSamples * NumChannels * BitsPerSample/8
-    late final int _subchunk2Size;
+    late int _subchunk2Size;
 
-    void buildHeader([int sr = 44100, int bfr = 512, isPcm = true]){
+    void buildHeader({int sampleRate = 44100, int dataSize = 512, isPcm = true}){
+        header.clear();
         if(isPcm){
             _format = 1;
             _subChunk1Size = 16;
@@ -65,11 +67,11 @@ class WaveFileHeader{
             _subChunk1Size = 18;
             _wavHeaderSize = 46;
         }
-        _sampleRate = sr;
-        _bufferSize = bfr;
-        _byteRate = (_sampleRate*_numChannels*_bitsPerSample)~/8;
-        _chunkSize = _wavHeaderSize + _bufferSize - 8;
-        _subchunk2Size = (_bufferSize * _numChannels * _bitsPerSample)~/8;
+        _sampleRate = sampleRate;
+        _dataSize   = dataSize;
+        _byteRate   = (_sampleRate*_numChannels*_bitsPerSample)~/8;
+        _subchunk2Size = (_dataSize * _numChannels * _bitsPerSample)~/8;
+        _chunkSize     = 36 + _subchunk2Size;
         buildRiffHeader();
         buildFmtChunk();
         buildDataChunk();
@@ -138,7 +140,23 @@ class WaveFileHeader{
     //...might need to do something to ensure proper endian
     void str2bytes(String s) => header.add(utf8Encoder.convert(s));
 
-    Uint8List twoBytes(int  v) => Uint8List(2)..buffer.asInt16List()[0] = v;
+    Uint8List twoBytes(int  v) => Uint8List(2)..buffer.asByteData().setInt16(0,v,Endian.little);
     
-    Uint8List fourBytes(int v) => Uint8List(4)..buffer.asInt32List()[0] = v;
+    Uint8List fourBytes(int v) => Uint8List(4)..buffer.asByteData().setInt32(0,v,Endian.little);
+
+    Future<int> createWaveFile(Uint8List audioData) async {
+        buildHeader();
+        header.add(audioData);
+        File audioFile = await writeFile("test16Bit_PCM.wav", header.toBytes());
+        return audioFile.length();
+    }
+
+    Future<File> writeFile(String name, Uint8List data) async {
+        final file = File('${Directory.current.path}/audioOut/$name');
+        print('writing ${Directory.current.path}/audioOut/$name');
+
+        // Write the file
+        return file.writeAsBytes(data);
+    }
+
 }

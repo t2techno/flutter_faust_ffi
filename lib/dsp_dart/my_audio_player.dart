@@ -20,11 +20,12 @@ class MyAudioPlayer {
     MyAudioPlayer();
 
     bool get isReady => _isReady;
+    BytesBuilder _recording = BytesBuilder(); 
 
     Future<bool> init() async {
         _synth.initSynth();
         startSynth();
-        _isReady = await connectAudioSource(_player, _audioSource); 
+        //_isReady = await connectAudioSource(_player, _audioSource); 
         print('player readyness: $_isReady');
         return _isReady;
     }
@@ -33,7 +34,7 @@ class MyAudioPlayer {
         // Catching errors at load time
         try {
             print("connecting audio source to player");
-            await player.setAudioSource(stream);
+            await player.setAudioSource(stream, initialPosition: Duration.zero, preload: false);
             print("audio source connected");
             return true;
         } on PlayerException catch (e) {
@@ -61,13 +62,13 @@ class MyAudioPlayer {
     }
     
     void play(){
-        _player.play();
-        listenToErrors(_player);
+        //_player.play();
+        //listenToErrors(_player);
     }
 
     void startSynth() async {
         _synth.play().listen((Uint8List data) {
-            _audioSource.bytes = data;
+            //_audioSource.bytes = data;
         }, onError: (Object e, StackTrace st) {
             print('An error occurred: $e');
             print('stacktrace: $st');
@@ -76,7 +77,7 @@ class MyAudioPlayer {
 
     void listenToErrors(AudioPlayer ap){
         ap.playbackEventStream.listen((event) {}, onError: (Object e, StackTrace st) {
-            if (e is PlayerException) {
+            if (e is PlayerException) { 
                 print('Error code: ${e.code}');
                 print('Error message: ${e.message}');
             } else {
@@ -88,6 +89,7 @@ class MyAudioPlayer {
     void pause() async {
         _player.pause();
         _synth.stopPlaying();
+        _synth.writeSynthAudio();
     }
 
     void dispose(){
