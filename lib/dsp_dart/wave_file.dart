@@ -8,25 +8,24 @@ class WaveFileHeader{
     // Can open this up for my customization later
     WaveFileHeader();
 
-
-    static BytesBuilder header = BytesBuilder();
-    static final utf8Encoder = utf8.encoder;
+    BytesBuilder header = BytesBuilder();
+    final utf8Encoder = utf8.encoder;
 
     // ToDo: Find best way to use global variables like samplerate/buffersize
-    static late final int _bufferSize;
+    late final int _bufferSize;
 
     // 44 for PCM
-    static const _wavHeaderSize = 46;
+    late int _wavHeaderSize;
 
     // 0x52494646 big-endian form
     static const _strRiff = 'RIFF';
 
     // Total file size in bytes (minues the 8 bytes of this and the previous field)
-    static late final int _chunkSize;
+    late final int _chunkSize;
 
     // Size of the fmt section. Doing 32-bit float, 
     // have to populate an extra 2 bytes for cbSize field extension
-    static const _subChunk1Size = 18;
+    late int _subChunk1Size;
 
     // 0x57415645 big-endian form
     static const _strWave = 'WAVE';
@@ -34,28 +33,38 @@ class WaveFileHeader{
     // 0x666d7420 big-endian form
     static const _strFmt = 'fmt ';
 
+    //0x0001    PCM
     //0x0003	WAVE_FORMAT_IEEE_FLOAT	IEEE float
-    static const _format = 3;
+    late int _format;
     static const _numChannels = 2;
-    static late final int _sampleRate;
+    late final int _sampleRate;
 
     //byteRate = SampleRate * NumChannels * BitsPerSample/8
-    static late final int _byteRate;
+    late final int _byteRate;
 
     //blockAlign = NumChannels * BitsPerSample/8
-    static const _blockAlign = (_numChannels * _bitsPerSample)~/8;
-    static const _bitsPerSample = 32;
+    final _blockAlign = (_numChannels * _bitsPerSample)~/8;
+    static const _bitsPerSample = 16;
 
     // ExtraParamSize doesn't exist if PCM audio 
     // have to include for non-PCM, even if it's 0 
-    static const _cbSize = 0;
+    final _cbSize = 0;
     
     static const _strData = 'data';
 
     // _subchunk2Size =  NumSamples * NumChannels * BitsPerSample/8
-    static late final int _subchunk2Size;
+    late final int _subchunk2Size;
 
-    void buildHeader([int sr = 44100, int bfr = 512]){
+    void buildHeader([int sr = 44100, int bfr = 512, isPcm = true]){
+        if(isPcm){
+            _format = 1;
+            _subChunk1Size = 16;
+            _wavHeaderSize = 44;
+        } else {
+            _format = 3;
+            _subChunk1Size = 18;
+            _wavHeaderSize = 46;
+        }
         _sampleRate = sr;
         _bufferSize = bfr;
         _byteRate = (_sampleRate*_numChannels*_bitsPerSample)~/8;
@@ -83,7 +92,7 @@ class WaveFileHeader{
     void buildRiffHeader(){
         str2bytes(_strRiff);
         header.add(fourBytes(_chunkSize));
-        bytePerLetter(_strWave);
+        str2bytes(_strWave);
     }
 
     // fmt subchunk
@@ -111,7 +120,7 @@ class WaveFileHeader{
         // not pcm
         if(_format != 1){
             header.add(twoBytes(_cbSize));
-        }  
+        }
     }
 
     // data subchunk
