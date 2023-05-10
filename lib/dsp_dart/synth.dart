@@ -1,7 +1,6 @@
 import 'dart:ffi';
 import 'package:ffi/ffi.dart';
 import 'dart:typed_data';
-import 'dart:io' show Directory;
 import 'dart:async';
 
 import 'package:path/path.dart' as path;
@@ -9,17 +8,18 @@ import 'dart:io';
 
 import './api_types.dart';
 import './generated_bindings.dart';
+import './wave_file.dart';
 
 class Synth {
-    static var isPlaying = false;
+    static var _isPlaying = false;
 
     // Objects from Faust Code
-    static late final Pointer<MyDsp> mydsp;
+    static late final Pointer<MyDsp> _mydsp;
 
     // Constants
     static late final int _bufferSize;
     static late final int _sampleRate;
-    static late final Duration tick;
+    static late final Duration _tick;
 
     static late final Pointer<Float> _inL;
     static late final Pointer<Float> _inR;
@@ -28,15 +28,18 @@ class Synth {
     static late final Pointer<Float> _outL;
     static late final Pointer<Float> _outR;
     static late final Pointer<Pointer<Float>> _buffer;
+    static final BytesBuilder _bb = BytesBuilder();
+    static final WaveFileHeader _waveHeader = new WaveFileHeader();
 
     // generated binding object interfacing c code
     static late final _impl;
     static const faustFile = 'faust_c';
 
-    Synth(int bufferSize, int sampleRate) {
+    Synth(int sampleRate, int bufferSize ) {
         _sampleRate  = sampleRate;
         _bufferSize  = bufferSize;
-        tick = Duration(microseconds:1000000~/_sampleRate);
+        _tick = Duration(microseconds:1000000~/_sampleRate);
+        _waveHeader.buildHeader(sampleRate, bufferSize);
     }
 
     void initSynth() {
@@ -44,27 +47,27 @@ class Synth {
         allocateBuffers();
         print('opening c library');
 
-        DynamicLibrary _dylib;
+        DynamicLibrary dylib;
         if (Platform.isAndroid || Platform.isLinux) {
             print('opening on Android or Linux');
-            _dylib = DynamicLibrary.open('lib$faustFile.so');
+            dylib = DynamicLibrary.open('lib$faustFile.so');
         }
         else if (Platform.isWindows) {
             print('opening on Windows');
-            _dylib = DynamicLibrary.open(Directory.current.path + '/assets/$faustFile.dll');
+            dylib = DynamicLibrary.open('${Directory.current.path}/assets/$faustFile.dll');
         } else {
             print("Sorry, I don't own a Mac :(");
             return;
         }
-        _impl = Faust(_dylib);
+        _impl = Faust(dylib);
         initializeDsp();
     }
 
     void initializeDsp() {
-        mydsp = _impl.newmydsp();
-        if(mydsp != nullptr){
+        _mydsp = _impl.newmydsp();
+        if(_mydsp != nullptr){
             print('dsp created');
-            _impl.initmydsp(mydsp, _sampleRate);
+            _impl.initmydsp(_mydsp, _sampleRate);
             print('dsp init-ed');
         }
         // currently not using an interface with faust
@@ -91,26 +94,43 @@ class Synth {
         print("made");
     }
 
-    void compute(){
-        _impl.computemydsp(mydsp, _bufferSize, _inputBuffer, _buffer);
+    Future<void> compute() async {
+        await _impl.computemydsp(_mydsp, _bufferSize, _inputBuffer, _buffer);
     }
 
+    // casting buffers as more convenient type
     Float32List get leftChannel  => _buffer[0].asTypedList(_bufferSize);
     Float32List get rightChannel => _buffer[1].asTypedList(_bufferSize);
 
-    // ToDo: Is it more efficient to yield pointers and defer
-    //       casting/splitting channel to listener?
-    Stream<List<Float32List>> play() async* {
-        isPlaying=true;
+    // interleaves the left and right stereo channels for wav format 
+    Uint8List get interleavedAudioBytes {
+        Float32List left = leftChannel;
+        Float32List right = rightChannel;
+        for(var i=0; i<_bufferSize; i++){
+            _bb..add(float2bytes(left[i]))
+              ..add(float2bytes(right[i]));
+        }
+        return _bb.takeBytes();
+    }
+
+    // Creates a list of 4 bytes, casts it as a Float32List(size one), assigns my double
+    // technically double in dart is 64bit, but they are floats coming from a FloatList32...
+    Uint8List float2bytes(double v) => Uint8List(4)..buffer.asFloat32List()[0] = v;
+
+    // sound making loop
+    // runs _samplingRate times per second, e
+    Stream<Uint8List> play() async* {
+        _isPlaying=true;
         //while(isPlaying){
-            compute();
-            yield [leftChannel, rightChannel];
-            await Future.delayed(tick);
+            await compute();
+            _bb.add(_waveHeader.getHeader());
+            yield interleavedAudioBytes;
+            await Future.delayed(_tick);
         //}
     }
 
     void stopPlaying(){
-        isPlaying = false;
+        _isPlaying = false;
     }
 
     void dispose(){
@@ -124,6 +144,6 @@ class Synth {
         calloc.free(_buffer);
 
         // free c pointer
-        _impl.deletemydsp();
+        _impl.deletemydsp(_mydsp);
     }
 }
