@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import './dsp_dart/stereo_player.dart';
+import './dsp_dart/my_audio_player.dart';
 
 void main() {
   runApp(const MyApp());
@@ -30,7 +30,7 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  final StereoPlayer _player = StereoPlayer();
+  final MyAudioPlayer _player = MyAudioPlayer();
   bool _gate = false;
 
   void _toggleGate() {
@@ -41,7 +41,7 @@ class _MyHomePageState extends State<MyHomePage> {
     if(_gate){
         startPlayer();
       } else {
-        _player.stop();
+        _player.pause();
       }
   }
 
