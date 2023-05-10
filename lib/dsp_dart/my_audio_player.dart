@@ -5,30 +5,28 @@ import 'dart:typed_data';
 
 import './synth.dart';
 
-class StereoPlayer {
+class MyAudioPlayer {
     static const _bufferSize = 512;
     static const _sampleRate = 44100;
-    static const signedInt32Max = (1 << 31)-1;
-    bool isReady = false;
-    Synth synth = Synth(_bufferSize, _sampleRate);
+    bool _isReady = false;
+    Synth _synth = Synth(_bufferSize, _sampleRate);
 
-    final SynthAudioStream lChannel = SynthAudioStream(List.filled(0,_bufferSize));
-    final SynthAudioStream rChannel = SynthAudioStream(List.filled(0,_bufferSize));
-    final AudioPlayer lPlayer = AudioPlayer();
-    final AudioPlayer rPlayer = AudioPlayer();
+    final SynthAudioStream _audioSource = SynthAudioStream(List.filled(0,_bufferSize));
+    final AudioPlayer _player = AudioPlayer();
 
 
-    bool isPlaying = false;
+    bool _isPlaying = false;
 
-    StereoPlayer();
+    MyAudioPlayer();
+
+    bool get isReady => _isReady;
 
     Future<bool> init() async {
-        synth.initSynth();
+        _synth.initSynth();
         startSynth();
-        isReady = await connectAudioSource(lPlayer, lChannel) &&
-                await connectAudioSource(rPlayer, rChannel); 
-        print('player readyness: $isReady');
-        return isReady;
+        _isReady = await connectAudioSource(_player, _audioSource); 
+        print('player readyness: $_isReady');
+        return _isReady;
     }
 
     Future<bool> connectAudioSource(AudioPlayer player, StreamAudioSource stream) async {
@@ -63,24 +61,21 @@ class StereoPlayer {
     }
     
     void play(){
-        lPlayer.play();
-        rPlayer.play();
-
-        listenTo(lPlayer);
-        listenTo(rPlayer);
+        _player.play();
+        listenToErrors(_player);
     }
 
     void startSynth() async {
-        synth.play().listen((List<Float32List> data) {
-            //lChannel.bytes = data[0].map((f) => (f*signedInt32Max).toInt()).toList();
-            //rChannel.bytes = data[1].map((f) => (f*signedInt32Max).toInt()).toList();
+        _synth.play().listen((Uint8List data) {
+            print(data);
+            _audioSource.bytes = data;
         }, onError: (Object e, StackTrace st) {
             print('An error occurred: $e');
             print('stacktrace: $st');
         });
     }
 
-    void listenTo(AudioPlayer ap){
+    void listenToErrors(AudioPlayer ap){
         ap.playbackEventStream.listen((event) {}, onError: (Object e, StackTrace st) {
             if (e is PlayerException) {
                 print('Error code: ${e.code}');
@@ -91,21 +86,19 @@ class StereoPlayer {
         });
     }
 
-    void stop() async {
-        await lPlayer.stop();
-        await rPlayer.stop();
-        synth.stopPlaying();
+    void pause() async {
+        _player.pause();
+        _synth.stopPlaying();
     }
 
     void dispose(){
-        lPlayer.stop();
-        rPlayer.stop();
-        synth.dispose();
+        _player.stop();
+        _synth.dispose();
     }
 }
 
 class SynthAudioStream extends StreamAudioSource {
-    final List<int> bytes;
+    List<int> bytes;
 
     SynthAudioStream(this.bytes);
 
