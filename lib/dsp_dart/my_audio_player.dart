@@ -67,7 +67,6 @@ class MyAudioPlayer {
 
     void startSynth() async {
         _synth.play().listen((Uint8List data) {
-            print(data);
             _audioSource.bytes = data;
         }, onError: (Object e, StackTrace st) {
             print('An error occurred: $e');
