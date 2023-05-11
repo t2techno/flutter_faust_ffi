@@ -40,8 +40,8 @@ class Synth {
     Synth(int sampleRate, int bufferSize ) {
         _sampleRate  = sampleRate;
         _bufferSize  = bufferSize;
-        _tick = Duration(microseconds:1000000~/_sampleRate);
-        _waveFile.buildHeader(sampleRate: sampleRate, dataSize: bufferSize);
+        _tick = Duration(microseconds:(1000000*bufferSize)~/_sampleRate);
+        _waveFile.buildHeader(sampleRate, bufferSize, true);
     }
 
     void initSynth() {
@@ -152,7 +152,7 @@ class Synth {
 
     Future<void> writeSynthAudio() async {
         print('writing file....');
-        var fileSize = await _waveFile.createWaveFile(_recorder.takeBytes());
+        var fileSize = await _waveFile.createWaveFile(_sampleRate, _recorder.takeBytes(), true);
         print('file writing complete! Wrote ${fileSize/1000} KB');
     }
 

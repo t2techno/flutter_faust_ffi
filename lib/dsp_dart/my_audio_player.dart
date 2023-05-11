@@ -6,10 +6,11 @@ import 'dart:typed_data';
 import './synth.dart';
 
 class MyAudioPlayer {
-    static const _bufferSize = 512;
-    static const _sampleRate = 44100;
+    // 384 batches/second
+    static const _bufferSize = 125;
+    static const _sampleRate = 48000;
     bool _isReady = false;
-    Synth _synth = Synth(_bufferSize, _sampleRate);
+    Synth _synth = Synth(_sampleRate, _bufferSize);
 
     final SynthAudioStream _audioSource = SynthAudioStream(List.filled(0,_bufferSize));
     final AudioPlayer _player = AudioPlayer();

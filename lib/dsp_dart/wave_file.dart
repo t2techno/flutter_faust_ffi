@@ -56,7 +56,7 @@ class WaveFile{
     // _subchunk2Size =  NumSamples * NumChannels * BitsPerSample/8
     late int _subchunk2Size;
 
-    void buildHeader({int sampleRate = 44100, int dataSize = 512, isPcm = true}){
+    void buildHeader(sampleRate, dataSize, isPcm){
         header.clear();
         if(isPcm){
             _format = 1;
@@ -81,7 +81,8 @@ class WaveFile{
         if(header.isNotEmpty){
             return header.toBytes();
         }
-        buildHeader();
+        print('using default values: 41000, 512, true');
+        buildHeader(41000, 512, true);
         return header.toBytes();
     }
 
@@ -118,7 +119,6 @@ class WaveFile{
               ..add(twoBytes(_byteRate))
               ..add(twoBytes(_blockAlign))
               ..add(twoBytes(_bitsPerSample));
-
         // not pcm
         if(_format != 1){
             header.add(twoBytes(_cbSize));
@@ -136,16 +136,34 @@ class WaveFile{
         header.add(fourBytes(_subchunk2Size));
     }
 
+    void logItAll(){
+        print('__RIFF__');
+        print('chunckSize: $_chunkSize - ${fourBytes(_chunkSize)}');
+        print('__WAVE__');
+        print('__fmt __');
+        print('_subChunk1Size: $_subChunk1Size - ${fourBytes(_subChunk1Size)}');
+        print('_format: $_format - ${twoBytes(_format)}');
+        print('_numChannels: $_numChannels - ${twoBytes(_numChannels)}');
+        print('_sampleRate: $_sampleRate - ${fourBytes(_sampleRate)}');
+        print('_byteRate: $_byteRate - ${fourBytes(_byteRate)}');
+        print('_blockAlign: $_blockAlign - ${twoBytes(_blockAlign)}');
+        print('_bitsPerSample: $_bitsPerSample - ${twoBytes(_bitsPerSample)}');
+        print('__DATA__');
+        print('_subchunk2Size: $_subchunk2Size - ${fourBytes(_subchunk2Size)}');
+    }
     // 1 byte per letter
-    //...might need to do something to ensure proper endian
     void str2bytes(String s) => header.add(utf8Encoder.convert(s));
 
     Uint8List twoBytes(int  v) => Uint8List(2)..buffer.asByteData().setInt16(0,v,Endian.little);
     
     Uint8List fourBytes(int v) => Uint8List(4)..buffer.asByteData().setInt32(0,v,Endian.little);
 
-    Future<int> createWaveFile(Uint8List audioData) async {
-        buildHeader();
+    Future<int> createWaveFile(int sampleRate, Uint8List audioData, bool isPcm) async {
+        print('batched header:');
+        logItAll();
+        buildHeader(sampleRate, audioData.lengthInBytes, isPcm);
+        print('file header:');
+        logItAll();
         header.add(audioData);
         File audioFile = await writeFile("test16Bit_PCM.wav", header.toBytes());
         return audioFile.length();
