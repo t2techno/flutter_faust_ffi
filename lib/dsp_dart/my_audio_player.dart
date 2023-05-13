@@ -12,35 +12,35 @@ class MyAudioPlayer {
     static const _sampleRate = 48000;
     static const _bitRate = 16;
     static const _numChannels = 2;
+    static const _tick = Duration(microseconds:(1000000*_bufferSize)~/_sampleRate);
     bool _isReady = false;
+
+    // extends StreamAudioSource
     Synth _synth = Synth(_sampleRate, _bufferSize, _bitRate, _numChannels, true);
-    final SynthAudioStream _audioSource = SynthAudioStream(Uint8List(_bufferSize));
     final AudioPlayer _player = AudioPlayer();
     late final audioSession;
-
-
-    bool _isPlaying = false;
+    
+    //don't need this right now
+    //BytesBuilder _recording = BytesBuilder(); 
 
     MyAudioPlayer();
 
     bool get isReady => _isReady;
-    BytesBuilder _recording = BytesBuilder(); 
 
     Future<bool> init() async {
         _synth.initSynth();
-        startSynth();
         audioSession = await AudioSession.instance;
         await audioSession.configure(AudioSessionConfiguration.music());
-        _isReady = await connectAudioSource(_player, _audioSource);
+        _isReady = await connectAudioSource();
         print('player readyness: $_isReady');
         return _isReady;
     }
 
-    Future<bool> connectAudioSource(AudioPlayer player, StreamAudioSource stream) async {
+    Future<bool> connectAudioSource() async {
         // Catching errors at load time
         try {
             print("connecting audio source to player");
-            await player.setAudioSource(stream, initialPosition: Duration.zero, preload: false);
+            await _player.setAudioSource(_synth, initialPosition: Duration.zero, preload: false);
             print("audio source connected");
             return true;
         } on PlayerException catch (e) {
@@ -67,22 +67,17 @@ class MyAudioPlayer {
         return false;
     }
     
-    void play(){
-        _player.play();
-        listenToErrors(_player);
+    Future<void> play() async {
+        listenToErrors();
+        listenToStreamState();
+        while(true){
+            _player.play();
+            Future.delayed(_tick);
+        }
     }
 
-    void startSynth() async {
-        _synth.play().listen((Uint8List data) {
-            _audioSource.bytes = data;
-        }, onError: (Object e, StackTrace st) {
-            print('An error occurred: $e');
-            print('stacktrace: $st');
-        });
-    }
-
-    void listenToErrors(AudioPlayer ap){
-        ap.playbackEventStream.listen((event) {}, onError: (Object e, StackTrace st) {
+    void listenToErrors(){
+        _player.playbackEventStream.listen((event) {}, onError: (Object e, StackTrace st) {
             if (e is PlayerException) { 
                 print('Error code: ${e.code}');
                 print('Error message: ${e.message}');
@@ -92,33 +87,41 @@ class MyAudioPlayer {
         });
     }
 
+    void listenToStreamState(){
+        _player.playerStateStream.listen((state) {
+            if (state.playing) {
+                print('idle');
+            } else {
+                switch (state.processingState) {
+                    case ProcessingState.idle:
+                        print('idle');
+                        break;
+                    case ProcessingState.loading:
+                        print('loading');
+                        break;
+                    case ProcessingState.buffering:
+                        print('buffering');
+                        break;
+                    case ProcessingState.ready:
+                        print('ready');
+                        break;
+                    case ProcessingState.completed:
+                        print('completed');
+                        break;
+                    default:
+                        print('new state: ${state.processingState}');
+                        break;
+                }
+            }
+        });
+    }
+
     void pause() async {
         _player.pause();
-        _synth.stopPlaying();
     }
 
     void dispose(){
         _player.stop();
         _synth.dispose();
-    }
-}
-
-class SynthAudioStream extends StreamAudioSource {
-    List<int> bytes;
-
-    SynthAudioStream(this.bytes);
-
-    @override
-    Future<StreamAudioResponse> request([int? start, int? end]) async {
-        print('.');
-        start ??= 0;
-        end ??= bytes.length;
-        return StreamAudioResponse(
-            sourceLength: bytes.length,
-            contentLength: end - start,
-            offset: start,
-            stream: Stream.value(bytes.sublist(start, end)),
-            contentType: 'audio/wave',
-        );
     }
 }

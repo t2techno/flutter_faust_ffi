@@ -4,17 +4,25 @@ import 'dart:typed_data';
 import 'dart:async';
 
 import 'package:path/path.dart' as path;
+import 'package:just_audio/just_audio.dart';
 import 'dart:io';
 
 import './api_types.dart';
 import './generated_bindings.dart';
 import './wave_file.dart';
 
-class Synth {
-    static var _isPlaying = false;
-
-    // Objects from Faust Code
+class Synth extends StreamAudioSource{
+    // Object from Faust Code
     static late final Pointer<MyDsp> _mydsp;
+
+    // generated binding object interfacing c code
+    static late final _impl;
+
+    //code to import
+    static const faustFile = 'faust_c';
+
+    // convert 32bit float/int to signed 16 for PCM
+    static const signedInt16Max = (1 << 15)-1;
 
     // Constants
     late int _bufferSize;
@@ -22,7 +30,9 @@ class Synth {
     late int _batchPerSec;
     late int _bitRate;
     late int _numChannels;
-    late bool _isPcm; 
+    late int _headerSize;
+    late bool _isPcm;
+    
     static late final Duration _tick;
 
     static late final Pointer<Float> _inL;
@@ -33,13 +43,10 @@ class Synth {
     static late final Pointer<Float> _outR;
     static late final Pointer<Pointer<Float>> _buffer;
     static final BytesBuilder _bb = BytesBuilder();
-    static final WaveFile _waveFile = new WaveFile();
+    static final WaveFile _waveFile = WaveFile();
     static final BytesBuilder _recorder = BytesBuilder();
+    static late final Uint8List _requestBytes;
 
-    // generated binding object interfacing c code
-    static late final _impl;
-    static const faustFile = 'faust_c';
-    static const signedInt16Max = (1 << 15)-1;
 
     Synth(int sampleRate, int bufferSize, int bitRate, int numChannels, bool isPcm) {
         _sampleRate = sampleRate;
@@ -50,6 +57,9 @@ class Synth {
         _batchPerSec = sampleRate~/bufferSize;
         _tick = Duration(microseconds:(1000000*bufferSize)~/_sampleRate);
         _waveFile.buildHeader(sampleRate, bufferSize, bitRate, numChannels, true);
+        _headerSize = isPcm ? 44 : 46;
+        _requestBytes = Uint8List((_bufferSize*(bitRate/8)*numChannels).toInt()+_headerSize);
+        _requestBytes.setAll(0,_waveFile.getHeader());
     }
 
     void initSynth() {
@@ -140,42 +150,6 @@ class Synth {
 
     Uint8List int16bytes(int v) => Uint8List(2)..buffer.asInt16List()[0] = v;
 
-    // sound making loop
-    // runs _samplingRate/_bufferSize times per second,
-    Stream<Uint8List> play() async* {
-        _isPlaying=true;
-        while(_isPlaying){
-            compute();
-            _bb.add(_waveFile.getHeader());
-            yield interleavedIntBytes;
-            await Future.delayed(_tick);
-        }
-    }
-
-    // test method while getting the file structure correct
-    void recordNSeconds(int n) async {
-        print('recording $n seconds');
-        for(int i=0;i<n; i++){
-            for(int j=0; j< _batchPerSec; j++){
-                compute();
-                _recorder.add(interleavedIntBytes);
-            }
-            print('${i+1}.');
-        }
-        await writeSynthAudio("test_wave.wav");
-    }
-
-    void stopPlaying(){
-        _isPlaying = false;
-    }
-
-    Future<void> writeSynthAudio(String fileName) async {
-        print('writing file....${_recorder.length}');
-        var fileSize = await _waveFile.createWaveFile(fileName, _recorder.takeBytes(), 
-                                                      _sampleRate, _bitRate, _numChannels,  true);
-        print('file writing complete! Wrote ${fileSize/1000} KB');
-    }
-
     void dispose(){
         // free pointers allocated in dart
         calloc.free(_inL);
@@ -188,5 +162,46 @@ class Synth {
 
         // free c pointer
         _impl.deletemydsp(_mydsp);
+    }
+
+    // test methods while getting the file structure correct
+    Future<void> writeSynthAudio(String fileName) async {
+        print('writing file....${_recorder.length}');
+        var fileSize = await _waveFile.createWaveFile(fileName, _recorder.takeBytes(), 
+                                                      _sampleRate, _bitRate, _numChannels,  true);
+        print('file writing complete! Wrote ${fileSize/1000} KB');
+    }
+
+    void recordNSeconds(int n) async {
+        print('recording $n seconds');
+        for(int i=0;i<n; i++){
+            for(int j=0; j< _batchPerSec; j++){
+                compute();
+                _recorder.add(interleavedIntBytes);
+            }
+            print('${i+1}.');
+        }
+        await writeSynthAudio("test_wave.wav");
+    }
+
+    ////////////////////
+    // StreamAudioSource
+    ////////////////////
+
+    get isBroadcast => true;
+    
+    @override
+    Future<StreamAudioResponse> request([int? start, int? end]) async {
+        compute();
+        _requestBytes.setAll(_headerSize, interleavedIntBytes.toList());
+        start ??= 0;
+        end ??= _requestBytes.lengthInBytes;
+        return StreamAudioResponse(
+            sourceLength: null,
+            contentLength: end - start,
+            offset: start,
+            stream: Stream.value(_requestBytes.sublist(start, end)),
+            contentType: 'audio/wave',
+        );
     }
 }
