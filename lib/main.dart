@@ -84,6 +84,7 @@ class _MyHomePageState extends State<MyHomePage> {
     if(!_player.isReady){
         if(!await _player.init()){
           print("failed to start player");
+          return;
         }
     }
     _player.play();

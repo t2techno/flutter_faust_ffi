@@ -37,15 +37,16 @@ class WaveFile{
     //0x0001    PCM
     //0x0003	WAVE_FORMAT_IEEE_FLOAT	IEEE float
     late int _format;
-    static const _numChannels = 2;
     late int _sampleRate;
 
     //byteRate = SampleRate * NumChannels * BitsPerSample/8
     late int _byteRate;
 
+    late int _numChannels;
+    late int _bitsPerSample;
+
     //blockAlign = NumChannels * BitsPerSample/8
-    final _blockAlign = (_numChannels * _bitsPerSample)~/8;
-    static const _bitsPerSample = 16;
+    late int _blockAlign;
 
     // ExtraParamSize doesn't exist if PCM audio 
     // have to include for non-PCM, even if it's 0 
@@ -54,23 +55,27 @@ class WaveFile{
     static const _strData = 'data';
 
     // _subchunk2Size =  NumSamples * NumChannels * BitsPerSample/8
+    // Note, I'm just passing the raw bytes, so no calc needed
     late int _subchunk2Size;
 
-    void buildHeader(sampleRate, dataSize, isPcm){
+    void buildHeader(int sampleRate, int numAudioBytes, 
+                     int bitsPerSample, int numChannels, bool isPcm){
         header.clear();
         if(isPcm){
-            _format = 1;
+            _format        = 1;
             _subChunk1Size = 16;
             _wavHeaderSize = 44;
         } else {
-            _format = 3;
+            _format        = 3;
             _subChunk1Size = 18;
             _wavHeaderSize = 46;
         }
-        _sampleRate = sampleRate;
-        _dataSize   = dataSize;
-        _byteRate   = (_sampleRate*_numChannels*_bitsPerSample)~/8;
-        _subchunk2Size = (_dataSize * _numChannels * _bitsPerSample)~/8;
+        _bitsPerSample = bitsPerSample;
+        _numChannels   = numChannels;
+        _sampleRate    = sampleRate;
+        _byteRate      = (_sampleRate*_numChannels*_bitsPerSample)~/8;
+        _blockAlign = (_numChannels * _bitsPerSample)~/8;
+        _subchunk2Size = numAudioBytes;
         _chunkSize     = 36 + _subchunk2Size;
         buildRiffHeader();
         buildFmtChunk();
@@ -81,8 +86,9 @@ class WaveFile{
         if(header.isNotEmpty){
             return header.toBytes();
         }
-        print('using default values: 41000, 512, true');
-        buildHeader(41000, 512, true);
+        print('building uninitialized header');
+        print('using default values: 41000, 512, 16, 2, true');
+        buildHeader(41000, 512, 16, 2, true);
         return header.toBytes();
     }
 
@@ -116,7 +122,7 @@ class WaveFile{
               ..add(twoBytes(_format))
               ..add(twoBytes(_numChannels))
               ..add(fourBytes(_sampleRate))
-              ..add(twoBytes(_byteRate))
+              ..add(fourBytes(_byteRate))
               ..add(twoBytes(_blockAlign))
               ..add(twoBytes(_bitsPerSample));
         // not pcm
@@ -158,14 +164,16 @@ class WaveFile{
     
     Uint8List fourBytes(int v) => Uint8List(4)..buffer.asByteData().setInt32(0,v,Endian.little);
 
-    Future<int> createWaveFile(int sampleRate, Uint8List audioData, bool isPcm) async {
-        print('batched header:');
-        logItAll();
-        buildHeader(sampleRate, audioData.lengthInBytes, isPcm);
-        print('file header:');
+    // Called externally to create a Wave file out of the passed in data
+    Future<int> createWaveFile(String name, Uint8List audioData, int sampleRate, 
+                               int bitsPerSample, int numChannels, bool isPcm) async {
+        // Wave files require an even number of bytes
+        if(audioData.lengthInBytes%2 == 1){audioData.add(0);}
+        
+        buildHeader(sampleRate, audioData.length, bitsPerSample, numChannels, isPcm);
         logItAll();
         header.add(audioData);
-        File audioFile = await writeFile("test16Bit_PCM.wav", header.toBytes());
+        File audioFile = await writeFile(name, header.toBytes());
         return audioFile.length();
     }
 

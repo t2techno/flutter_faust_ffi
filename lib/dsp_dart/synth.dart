@@ -17,8 +17,12 @@ class Synth {
     static late final Pointer<MyDsp> _mydsp;
 
     // Constants
-    static late final int _bufferSize;
-    static late final int _sampleRate;
+    late int _bufferSize;
+    late int _sampleRate;
+    late int _batchPerSec;
+    late int _bitRate;
+    late int _numChannels;
+    late bool _isPcm; 
     static late final Duration _tick;
 
     static late final Pointer<Float> _inL;
@@ -37,11 +41,15 @@ class Synth {
     static const faustFile = 'faust_c';
     static const signedInt16Max = (1 << 15)-1;
 
-    Synth(int sampleRate, int bufferSize ) {
-        _sampleRate  = sampleRate;
-        _bufferSize  = bufferSize;
+    Synth(int sampleRate, int bufferSize, int bitRate, int numChannels, bool isPcm) {
+        _sampleRate = sampleRate;
+        _bufferSize = bufferSize;
+        _bitRate = bitRate;
+        _numChannels = numChannels;
+        _isPcm = isPcm;
+        _batchPerSec = sampleRate~/bufferSize;
         _tick = Duration(microseconds:(1000000*bufferSize)~/_sampleRate);
-        _waveFile.buildHeader(sampleRate, bufferSize, true);
+        _waveFile.buildHeader(sampleRate, bufferSize, bitRate, numChannels, true);
     }
 
     void initSynth() {
@@ -133,26 +141,38 @@ class Synth {
     Uint8List int16bytes(int v) => Uint8List(2)..buffer.asInt16List()[0] = v;
 
     // sound making loop
-    // runs _samplingRate times per second,
+    // runs _samplingRate/_bufferSize times per second,
     Stream<Uint8List> play() async* {
         _isPlaying=true;
         while(_isPlaying){
             compute();
-            _recorder.add(interleavedIntBytes);
-            print('.');
-            //_bb.add(_waveHeader.getHeader());
-            //yield interleavedIntBytes;
+            _bb.add(_waveFile.getHeader());
+            yield interleavedIntBytes;
             await Future.delayed(_tick);
         }
+    }
+
+    // test method while getting the file structure correct
+    void recordNSeconds(int n) async {
+        print('recording $n seconds');
+        for(int i=0;i<n; i++){
+            for(int j=0; j< _batchPerSec; j++){
+                compute();
+                _recorder.add(interleavedIntBytes);
+            }
+            print('${i+1}.');
+        }
+        await writeSynthAudio("test_wave.wav");
     }
 
     void stopPlaying(){
         _isPlaying = false;
     }
 
-    Future<void> writeSynthAudio() async {
-        print('writing file....');
-        var fileSize = await _waveFile.createWaveFile(_sampleRate, _recorder.takeBytes(), true);
+    Future<void> writeSynthAudio(String fileName) async {
+        print('writing file....${_recorder.length}');
+        var fileSize = await _waveFile.createWaveFile(fileName, _recorder.takeBytes(), 
+                                                      _sampleRate, _bitRate, _numChannels,  true);
         print('file writing complete! Wrote ${fileSize/1000} KB');
     }
 

@@ -1,4 +1,5 @@
 import 'package:just_audio/just_audio.dart';
+import 'package:audio_session/audio_session.dart';
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -9,11 +10,13 @@ class MyAudioPlayer {
     // 384 batches/second
     static const _bufferSize = 125;
     static const _sampleRate = 48000;
+    static const _bitRate = 16;
+    static const _numChannels = 2;
     bool _isReady = false;
-    Synth _synth = Synth(_sampleRate, _bufferSize);
-
-    final SynthAudioStream _audioSource = SynthAudioStream(List.filled(0,_bufferSize));
+    Synth _synth = Synth(_sampleRate, _bufferSize, _bitRate, _numChannels, true);
+    final SynthAudioStream _audioSource = SynthAudioStream(Uint8List(_bufferSize));
     final AudioPlayer _player = AudioPlayer();
+    late final audioSession;
 
 
     bool _isPlaying = false;
@@ -26,7 +29,9 @@ class MyAudioPlayer {
     Future<bool> init() async {
         _synth.initSynth();
         startSynth();
-        //_isReady = await connectAudioSource(_player, _audioSource); 
+        audioSession = await AudioSession.instance;
+        await audioSession.configure(AudioSessionConfiguration.music());
+        _isReady = await connectAudioSource(_player, _audioSource);
         print('player readyness: $_isReady');
         return _isReady;
     }
@@ -63,13 +68,13 @@ class MyAudioPlayer {
     }
     
     void play(){
-        //_player.play();
-        //listenToErrors(_player);
+        _player.play();
+        listenToErrors(_player);
     }
 
     void startSynth() async {
         _synth.play().listen((Uint8List data) {
-            //_audioSource.bytes = data;
+            _audioSource.bytes = data;
         }, onError: (Object e, StackTrace st) {
             print('An error occurred: $e');
             print('stacktrace: $st');
@@ -90,7 +95,6 @@ class MyAudioPlayer {
     void pause() async {
         _player.pause();
         _synth.stopPlaying();
-        _synth.writeSynthAudio();
     }
 
     void dispose(){
@@ -106,6 +110,7 @@ class SynthAudioStream extends StreamAudioSource {
 
     @override
     Future<StreamAudioResponse> request([int? start, int? end]) async {
+        print('.');
         start ??= 0;
         end ??= bytes.length;
         return StreamAudioResponse(
