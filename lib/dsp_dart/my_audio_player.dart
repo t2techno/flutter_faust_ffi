@@ -12,16 +12,12 @@ class MyAudioPlayer {
     static const _sampleRate = 48000;
     static const _bitRate = 16;
     static const _numChannels = 2;
-    static const _tick = Duration(microseconds:(1000000*_bufferSize)~/_sampleRate);
     bool _isReady = false;
 
     // extends StreamAudioSource
     Synth _synth = Synth(_sampleRate, _bufferSize, _bitRate, _numChannels, true);
     final AudioPlayer _player = AudioPlayer();
     late final audioSession;
-    
-    //don't need this right now
-    //BytesBuilder _recording = BytesBuilder(); 
 
     MyAudioPlayer();
 
@@ -32,7 +28,7 @@ class MyAudioPlayer {
         audioSession = await AudioSession.instance;
         await audioSession.configure(AudioSessionConfiguration.music());
         _isReady = await connectAudioSource();
-        print('player readyness: $_isReady');
+        print('player is ready? - $_isReady');
         return _isReady;
     }
 
@@ -70,10 +66,7 @@ class MyAudioPlayer {
     Future<void> play() async {
         listenToErrors();
         listenToStreamState();
-        while(true){
-            _player.play();
-            Future.delayed(_tick);
-        }
+        _player.play();
     }
 
     void listenToErrors(){
@@ -118,6 +111,7 @@ class MyAudioPlayer {
 
     void pause() async {
         _player.pause();
+        _synth.pause();
     }
 
     void dispose(){

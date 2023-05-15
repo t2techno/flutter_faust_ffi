@@ -9,7 +9,12 @@ class WaveFile{
     // Can open this up for my customization later
     WaveFile();
 
-    BytesBuilder header = BytesBuilder();
+    final _headerBuilder = BytesBuilder();
+    final _output = BytesBuilder();
+
+    // Store the built header in a ByteData object
+    // so I can overwrite just _chunkSize and _subchunk2Size variable data length
+    late final ByteData _header;
     final utf8Encoder = utf8.encoder;
 
     // ToDo: Find best way to use global variables like samplerate/buffersize
@@ -23,6 +28,7 @@ class WaveFile{
 
     // Total file size in bytes (minues the 8 bytes of this and the previous field)
     late int _chunkSize;
+    static const _chunkSizeOffset = 4;
 
     // Size of the fmt section. Doing 32-bit float, 
     // have to populate an extra 2 bytes for cbSize field extension
@@ -57,40 +63,78 @@ class WaveFile{
     // _subchunk2Size =  NumSamples * NumChannels * BitsPerSample/8
     // Note, I'm just passing the raw bytes, so no calc needed
     late int _subchunk2Size;
+    late int _subchunk2SizeOffset;
 
     void buildHeader(int sampleRate, int numAudioBytes, 
                      int bitsPerSample, int numChannels, bool isPcm){
-        header.clear();
+        _headerBuilder.clear();
+
         if(isPcm){
             _format        = 1;
             _subChunk1Size = 16;
             _wavHeaderSize = 44;
+            _subchunk2SizeOffset = 40;
         } else {
             _format        = 3;
             _subChunk1Size = 18;
             _wavHeaderSize = 46;
+            _subchunk2SizeOffset = 42;
         }
         _bitsPerSample = bitsPerSample;
         _numChannels   = numChannels;
         _sampleRate    = sampleRate;
         _byteRate      = (_sampleRate*_numChannels*_bitsPerSample)~/8;
-        _blockAlign = (_numChannels * _bitsPerSample)~/8;
+        _blockAlign    = (_numChannels * _bitsPerSample)~/8;
         _subchunk2Size = numAudioBytes;
-        _chunkSize     = 36 + _subchunk2Size;
+        _chunkSize     = (_wavHeaderSize-8) + _subchunk2Size;
         buildRiffHeader();
         buildFmtChunk();
         buildDataChunk();
+        _header = ByteData(_wavHeaderSize);
+        _header.buffer.asUint8List().setRange(0,_wavHeaderSize,_headerBuilder.takeBytes());
+        print('_header: $_header');
+    }
+
+    Uint8List get headerBytes => _header.buffer.asUint8List();
+
+    Uint8List headerWithData(Uint8List data){
+        if (_header.lengthInBytes == 0){
+            print('need to initialize header first');
+            return data;
+        }
+
+        if(_subchunk2Size == data.length){
+            _output..add(headerBytes)..add(data);
+            return _output.takeBytes();
+        }
+        
+        _subchunk2Size = data.length;
+        updateNBytesForOffset(4, fourBytes(_subchunk2Size), _subchunk2SizeOffset);
+
+        _chunkSize = (_wavHeaderSize-8) + _subchunk2Size;
+        updateNBytesForOffset(4, fourBytes(_chunkSize), _chunkSizeOffset);
+        _output..add(headerBytes)..add(data);
+        return _output.takeBytes();
+    }
+
+    void updateNBytesForOffset(int n, Uint8List bytes, int offset){
+        for(int i=0; i<n; i++){
+            offset+=i;
+            _header.setUint8(offset, bytes[i]);
+        }
     }
 
     Uint8List getHeader(){
-        if(header.isNotEmpty){
-            return header.toBytes();
+        if(_header.lengthInBytes != 0){
+            return headerBytes;
         }
         print('building uninitialized header');
         print('using default values: 41000, 512, 16, 2, true');
         buildHeader(41000, 512, 16, 2, true);
-        return header.toBytes();
+        return headerBytes;
     }
+
+    int get headerLength => _header.lengthInBytes;
 
     // RIFF Header
     ///////////////////////
@@ -100,7 +144,7 @@ class WaveFile{
     //8         4   Format
     void buildRiffHeader(){
         str2bytes(_strRiff);
-        header.add(fourBytes(_chunkSize));
+        _headerBuilder.add(fourBytes(_chunkSize));
         str2bytes(_strWave);
     }
 
@@ -118,16 +162,16 @@ class WaveFile{
     //(36)      2   ExtraParamSize
     void buildFmtChunk(){
         str2bytes(_strFmt);
-        header..add(fourBytes(_subChunk1Size))
-              ..add(twoBytes(_format))
-              ..add(twoBytes(_numChannels))
-              ..add(fourBytes(_sampleRate))
-              ..add(fourBytes(_byteRate))
-              ..add(twoBytes(_blockAlign))
-              ..add(twoBytes(_bitsPerSample));
+        _headerBuilder..add(fourBytes(_subChunk1Size))
+               ..add(twoBytes(_format))
+               ..add(twoBytes(_numChannels))
+               ..add(fourBytes(_sampleRate))
+               ..add(fourBytes(_byteRate))
+               ..add(twoBytes(_blockAlign))
+               ..add(twoBytes(_bitsPerSample));
         // not pcm
         if(_format != 1){
-            header.add(twoBytes(_cbSize));
+            _headerBuilder.add(twoBytes(_cbSize));
         }
     }
 
@@ -139,7 +183,7 @@ class WaveFile{
     //44(46)    *   Data
     void buildDataChunk(){
         str2bytes(_strData);
-        header.add(fourBytes(_subchunk2Size));
+        _headerBuilder.add(fourBytes(_subchunk2Size));
     }
 
     void logItAll(){
@@ -158,7 +202,7 @@ class WaveFile{
         print('_subchunk2Size: $_subchunk2Size - ${fourBytes(_subchunk2Size)}');
     }
     // 1 byte per letter
-    void str2bytes(String s) => header.add(utf8Encoder.convert(s));
+    void str2bytes(String s) => _headerBuilder.add(utf8Encoder.convert(s));
 
     Uint8List twoBytes(int  v) => Uint8List(2)..buffer.asByteData().setInt16(0,v,Endian.little);
     
@@ -172,8 +216,9 @@ class WaveFile{
         
         buildHeader(sampleRate, audioData.length, bitsPerSample, numChannels, isPcm);
         logItAll();
-        header.add(audioData);
-        File audioFile = await writeFile(name, header.toBytes());
+        _output..add(_headerBuilder.toBytes())..add(audioData);
+        File audioFile = await writeFile(name, _output.takeBytes());
+        _output.clear();
         return audioFile.length();
     }
 

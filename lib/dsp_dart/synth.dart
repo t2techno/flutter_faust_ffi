@@ -32,21 +32,28 @@ class Synth extends StreamAudioSource{
     late int _numChannels;
     late int _headerSize;
     late bool _isPcm;
+    late int _batchByteSize;
+    int _currentBatchSize = -1;
     
-    static late final Duration _tick;
+    // sampleRate/bufferSize times per second
+    late Duration _tick;
 
-    static late final Pointer<Float> _inL;
-    static late final Pointer<Float> _inR;
-    static late final Pointer<Pointer<Float>> _inputBuffer;
+    late final Pointer<Float> _inL;
+    late final Pointer<Float> _inR;
+    late final Pointer<Pointer<Float>> _inputBuffer;
 
-    static late final Pointer<Float> _outL;
-    static late final Pointer<Float> _outR;
-    static late final Pointer<Pointer<Float>> _buffer;
-    static final BytesBuilder _bb = BytesBuilder();
-    static final WaveFile _waveFile = WaveFile();
-    static final BytesBuilder _recorder = BytesBuilder();
-    static late final Uint8List _requestBytes;
+    late final Pointer<Float> _outL;
+    late final Pointer<Float> _outR;
+    late final Pointer<Pointer<Float>> _buffer;
 
+    // for interleaving
+    final _bb = BytesBuilder();
+
+    // Wave file header and file writing
+    final _waveFile = WaveFile();
+    final _recorder = BytesBuilder();
+    late final Stream<Uint8List> _synthStream;
+    late final StreamSubscription<Uint8List> _streamSub;
 
     Synth(int sampleRate, int bufferSize, int bitRate, int numChannels, bool isPcm) {
         _sampleRate = sampleRate;
@@ -56,10 +63,13 @@ class Synth extends StreamAudioSource{
         _isPcm = isPcm;
         _batchPerSec = sampleRate~/bufferSize;
         _tick = Duration(microseconds:(1000000*bufferSize)~/_sampleRate);
-        _waveFile.buildHeader(sampleRate, bufferSize, bitRate, numChannels, true);
         _headerSize = isPcm ? 44 : 46;
-        _requestBytes = Uint8List((_bufferSize*(bitRate/8)*numChannels).toInt()+_headerSize);
-        _requestBytes.setAll(0,_waveFile.getHeader());
+        
+        final dataByteSize = (_bufferSize*_numChannels*(_bitRate~/8));
+        _batchByteSize = _headerSize + dataByteSize;
+        print('building header...');
+        _waveFile.buildHeader(sampleRate, dataByteSize, bitRate, numChannels, true);
+        print('header built');
     }
 
     void initSynth() {
@@ -81,6 +91,7 @@ class Synth extends StreamAudioSource{
         }
         _impl = Faust(dylib);
         initializeDsp();
+        initializeStream();
     }
 
     void initializeDsp() {
@@ -92,6 +103,15 @@ class Synth extends StreamAudioSource{
         }
         // currently not using an interface with faust
         //_impl.buildUserInterfacemydsp();
+    }
+
+    void initializeStream(){
+        _synthStream = Stream<Uint8List>.periodic(_tick, 
+            (count) => _waveFile.headerWithData(compute())
+        ).asBroadcastStream();
+
+        // pause the stream until we need it
+        _streamSub = _synthStream.listen((data)=>{data})..pause();
     }
 
     void allocateBuffers(){
@@ -114,8 +134,13 @@ class Synth extends StreamAudioSource{
         print("made");
     }
 
-    compute() {
+    Uint8List compute() {
         _impl.computemydsp(_mydsp, _bufferSize, _inputBuffer, _buffer);
+        return _isPcm ? interleavedIntBytes : interleavedFloatBytes;
+    }
+
+    void pause(){
+        _streamSub.pause();
     }
 
     // casting buffers as more convenient type
@@ -151,6 +176,8 @@ class Synth extends StreamAudioSource{
     Uint8List int16bytes(int v) => Uint8List(2)..buffer.asInt16List()[0] = v;
 
     void dispose(){
+        _streamSub.cancel();
+
         // free pointers allocated in dart
         calloc.free(_inL);
         calloc.free(_inR);
@@ -188,19 +215,19 @@ class Synth extends StreamAudioSource{
     // StreamAudioSource
     ////////////////////
 
-    get isBroadcast => true;
-    
     @override
     Future<StreamAudioResponse> request([int? start, int? end]) async {
-        compute();
-        _requestBytes.setAll(_headerSize, interleavedIntBytes.toList());
+        print('request');
+        _streamSub.resume();
+
         start ??= 0;
-        end ??= _requestBytes.lengthInBytes;
+        end ??= _batchByteSize;
+        print('end: $end');
         return StreamAudioResponse(
-            sourceLength: null,
+            sourceLength: 10000000,
             contentLength: end - start,
             offset: start,
-            stream: Stream.value(_requestBytes.sublist(start, end)),
+            stream: _synthStream,
             contentType: 'audio/wave',
         );
     }
