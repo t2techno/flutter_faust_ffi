@@ -2,8 +2,8 @@ import 'dart:ffi';
 import 'package:ffi/ffi.dart';
 import 'dart:typed_data';
 import 'dart:async';
+import 'package:async/async.dart';
 
-import 'package:path/path.dart' as path;
 import 'package:just_audio/just_audio.dart';
 import 'dart:io';
 
@@ -24,7 +24,7 @@ class Synth extends StreamAudioSource{
     // convert 32bit float/int to signed 16 for PCM
     static const signedInt16Max = (1 << 15)-1;
 
-    // Constants
+    // audio props
     late int _bufferSize;
     late int _sampleRate;
     late int _batchPerSec;
@@ -33,7 +33,6 @@ class Synth extends StreamAudioSource{
     late int _headerSize;
     late bool _isPcm;
     late int _batchByteSize;
-    int _currentBatchSize = -1;
     
     // sampleRate/bufferSize times per second
     late Duration _tick;
@@ -52,8 +51,9 @@ class Synth extends StreamAudioSource{
     // Wave file header and file writing
     final _waveFile = WaveFile();
     final _recorder = BytesBuilder();
-    late final Stream<Uint8List> _synthStream;
-    late final StreamSubscription<Uint8List> _streamSub;
+    late final StreamController<Uint8List> _streamController;
+    late final StreamQueue<Uint8List> _streamQ;
+    late Timer? _synthTimer;
 
     Synth(int sampleRate, int bufferSize, int bitRate, int numChannels, bool isPcm) {
         _sampleRate = sampleRate;
@@ -67,9 +67,15 @@ class Synth extends StreamAudioSource{
         
         final dataByteSize = (_bufferSize*_numChannels*(_bitRate~/8));
         _batchByteSize = _headerSize + dataByteSize;
-        print('building header...');
         _waveFile.buildHeader(sampleRate, dataByteSize, bitRate, numChannels, true);
-        print('header built');
+        _streamController = StreamController<Uint8List>(onListen:onListen,
+                                                        onPause: onPause,
+                                                        onResume:onResume,
+                                                        onCancel:onCancel);
+        print('beep');
+        _streamQ = StreamQueue(_streamController.stream.asBroadcastStream());
+        print('boop');
+        initSynth();
     }
 
     void initSynth() {
@@ -91,7 +97,6 @@ class Synth extends StreamAudioSource{
         }
         _impl = Faust(dylib);
         initializeDsp();
-        initializeStream();
     }
 
     void initializeDsp() {
@@ -103,15 +108,6 @@ class Synth extends StreamAudioSource{
         }
         // currently not using an interface with faust
         //_impl.buildUserInterfacemydsp();
-    }
-
-    void initializeStream(){
-        _synthStream = Stream<Uint8List>.periodic(_tick, 
-            (count) => _waveFile.headerWithData(compute())
-        ).asBroadcastStream();
-
-        // pause the stream until we need it
-        _streamSub = _synthStream.listen((data)=>{data})..pause();
     }
 
     void allocateBuffers(){
@@ -134,15 +130,46 @@ class Synth extends StreamAudioSource{
         print("made");
     }
 
+    void initializeStream(){
+        print('init stream');
+        _synthTimer = Timer.periodic(_tick, computeBatch);
+    }
+
+    void computeBatch(_){
+        _streamController.add(_waveFile.headerWithData(compute()));
+    }
+    
+    void onListen(){
+        print('on listen');
+        initializeStream();
+    }
+
+    void onPause(){
+        print('on pause');
+        _synthTimer?.cancel();
+        _synthTimer = null;
+    }
+
+    void onResume(){
+        print('on resume');
+        initializeStream();
+    }
+
+    void onCancel(){
+        print('on cancel');
+        _synthTimer?.cancel();
+        _synthTimer = null;
+    }
+
     Uint8List compute() {
         _impl.computemydsp(_mydsp, _bufferSize, _inputBuffer, _buffer);
         return _isPcm ? interleavedIntBytes : interleavedFloatBytes;
     }
 
-    void pause(){
-        _streamSub.pause();
-    }
 
+    void pause(){
+        _streamController.close();
+    }
     // casting buffers as more convenient type
     Float32List get leftFloats  => _buffer[0].asTypedList(_bufferSize);
     Float32List get rightFloats => _buffer[1].asTypedList(_bufferSize);
@@ -176,8 +203,6 @@ class Synth extends StreamAudioSource{
     Uint8List int16bytes(int v) => Uint8List(2)..buffer.asInt16List()[0] = v;
 
     void dispose(){
-        _streamSub.cancel();
-
         // free pointers allocated in dart
         calloc.free(_inL);
         calloc.free(_inR);
@@ -189,6 +214,8 @@ class Synth extends StreamAudioSource{
 
         // free c pointer
         _impl.deletemydsp(_mydsp);
+
+        _streamController.close();
     }
 
     // test methods while getting the file structure correct
@@ -217,17 +244,14 @@ class Synth extends StreamAudioSource{
 
     @override
     Future<StreamAudioResponse> request([int? start, int? end]) async {
-        print('request');
-        _streamSub.resume();
-
         start ??= 0;
         end ??= _batchByteSize;
-        print('end: $end');
-        return StreamAudioResponse(
-            sourceLength: 10000000,
+
+        return StreamAudioResponse (
+            sourceLength: null,
             contentLength: end - start,
             offset: start,
-            stream: _synthStream,
+            stream: Stream.fromFuture(_streamQ.next),
             contentType: 'audio/wave',
         );
     }

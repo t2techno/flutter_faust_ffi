@@ -24,7 +24,6 @@ class MyAudioPlayer {
     bool get isReady => _isReady;
 
     Future<bool> init() async {
-        _synth.initSynth();
         audioSession = await AudioSession.instance;
         await audioSession.configure(AudioSessionConfiguration.music());
         _isReady = await connectAudioSource();
